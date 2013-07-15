@@ -1,0 +1,60 @@
+name: EMS
+author: basicmark
+description: Event Management System
+main: io.github.basicmark.ems.EMSPlugin
+startup: postworld
+url: None
+depend: []
+softdepend: []
+version: 0.1
+commands:
+    ems:
+        description: Type /ems ? for more info
+        usage: /ems ?
+permissions:
+    ems.admin.*:
+        description: Default admin permission nodes
+        default: op
+        children:
+            ems.editarena: true
+            ems.host: true
+            ems.enable: true
+            ems.reload: true
+            ems.kick: true
+            ems.info: true
+            ems.play: true
+
+    ems.mod.*:
+        description: Default mod permission nodes
+        default: false
+        children:
+            ems.host: true
+            ems.enable: true
+            ems.info: true
+            ems.play: true
+
+    ems.player.*:
+        description: Grants all permissions that a regular player usually gets
+        default: false
+        children:
+            ems.info: true
+            ems.play: true
+
+    ems.editarena:
+        description: Allows you to create a event arena.
+        default: false
+    ems.host:
+        description: Allows you to host an event arena.
+        default: false
+    ems.enable:
+        description: Allows you enable/disable an event arena.
+        default: false
+    ems.reload:
+        description: Allows you to reload the configuration files.
+        default: false
+    ems.kick:
+        description: Allows you to kick a player from an arena.
+        default: false
+    ems.play:
+        description: Allows you a join/leave a arena.
+        default: false
