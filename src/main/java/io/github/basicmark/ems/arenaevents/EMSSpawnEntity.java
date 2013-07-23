@@ -6,7 +6,6 @@ import io.github.basicmark.ems.EMSArena;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
@@ -17,6 +16,8 @@ public class EMSSpawnEntity implements EMSArenaEvent{
 	Location location;
 	EntityType entity;
 	int count;
+	
+	Entity[] spawnedEntities = null;
 
 	public EMSSpawnEntity(EMSArena arena, String triggerEvent, Location location, EntityType entity, int count) {
 		this.arena = arena;
@@ -45,14 +46,10 @@ public class EMSSpawnEntity implements EMSArenaEvent{
 	public void signalEvent(String trigger) {
 		// Start the timer task
 		if (trigger.equals(triggerEvent)) {
+			spawnedEntities = new Entity[count];
 			for (int i=0;i<count;i++) {
-				Bukkit.getServer().getLogger().info("Spawning " + entity.getName() + "@" + location.toString());
 				Entity ent = location.getWorld().spawnEntity(location, entity);
-				if (ent != null) {
-					Bukkit.getServer().getLogger().info("Created " + ent.toString());
-				} else {
-					Bukkit.getServer().getLogger().info("Created nothing");
-				}
+				spawnedEntities[i] = ent;
 			}
 		}
 	}
@@ -67,7 +64,13 @@ public class EMSSpawnEntity implements EMSArenaEvent{
 	}
 	
 	public void cancelEvent() {
-		// Nothing to do
+		if (spawnedEntities != null) {
+			for (int i=0;i<count;i++) { 
+				if (spawnedEntities[i].isValid()) {
+					spawnedEntities[i].remove();
+				}
+			}
+		}
 	}
 	
 	public void destroy() {
