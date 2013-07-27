@@ -15,6 +15,7 @@ import io.github.basicmark.ems.arenaevents.EMSSpawnEntity;
 import io.github.basicmark.ems.arenaevents.EMSTeleport;
 import io.github.basicmark.ems.arenaevents.EMSTimer;
 import io.github.basicmark.ems.arenaevents.EMSTracker;
+import io.github.basicmark.util.PlayerDeathInventory;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -53,6 +54,7 @@ public class EMSArena implements ConfigurationSerializable {
 	protected boolean saveHealth;
 	protected boolean keepInvAfterEvent;
 	protected boolean lobbyRespawn;
+	protected boolean keepInvAfterDeath;
 	protected HashMap<String, EMSTeam> teams;
 	protected List<EMSArenaEvent> events;
 	
@@ -64,6 +66,7 @@ public class EMSArena implements ConfigurationSerializable {
 	private Set<Player> playersInLobby;
 	private HashMap<Player, Location> playersLoc;
 	protected Set<Location> protections;
+	protected HashMap<Player, PlayerDeathInventory> playersDeathInv;
 	
 	PlayerStateLoader playerLoader;
 	JavaPlugin plugin;	// Required to schedule the player teleport after death
@@ -77,6 +80,7 @@ public class EMSArena implements ConfigurationSerializable {
 		this.playersInLobby = new HashSet<Player>();	//new ConcurrentSkipListSet<Player>();
 		this.playersLoc = new HashMap<Player, Location>();
 		this.protections = new HashSet<Location>();
+		this.playersDeathInv = new HashMap<Player, PlayerDeathInventory>();
 	}
 	
 	public EMSArena(String name) {
@@ -93,6 +97,7 @@ public class EMSArena implements ConfigurationSerializable {
 		this.saveHealth= true; 
 		this.keepInvAfterEvent = false;
 		this.lobbyRespawn = false;
+		this.keepInvAfterDeath = false;
 		
 		// Add tracking and auto-end by default
 		events.add(new EMSTracker(this));
@@ -134,6 +139,11 @@ public class EMSArena implements ConfigurationSerializable {
 		} catch (Exception e) {
 			this.lobbyRespawn = false;
 		}
+		try {
+			this.keepInvAfterDeath = (boolean) values.get("keepinvafterdeath");
+		} catch (Exception e) {
+			this.keepInvAfterDeath = false;
+		}
 		
 		this.teams = new HashMap<String, EMSTeam>();
 		int teamCount = (int) values.get("teamcount");
@@ -167,10 +177,16 @@ public class EMSArena implements ConfigurationSerializable {
 		if (lobby != null) {
 			values.put("lobby", ConfigUtils.SerializeLocation(lobby));
 		}
+
+		/* Player management settings */
 		values.put("saveinventory", saveInventory);
 		values.put("savexp", saveXP);
 		values.put("savehealth", saveHealth);
 		values.put("keepinvafterevent", keepInvAfterEvent);
+		values.put("lobbyrespawn", lobbyRespawn);
+		values.put("keepinvafterdeath", keepInvAfterDeath);
+
+		/* Team management settings */
 		values.put("requiresteamlobby", requiresTeamLobby);
 		values.put("teamcount", teams.size());
 
@@ -183,6 +199,7 @@ public class EMSArena implements ConfigurationSerializable {
 			j++;
 		}
 
+		/* Event settings */
 		values.put("eventcount", events.size());
 		Iterator<EMSArenaEvent> ie = events.iterator();
 		j=0;
@@ -318,7 +335,12 @@ public class EMSArena implements ConfigurationSerializable {
 	public boolean setKeepInvAfterEvent(boolean keep) {
 		this.keepInvAfterEvent = keep;
 		return true;
-	}	
+	}
+	
+	public boolean setKeepInvAfterDeath(boolean keep) {
+		this.keepInvAfterDeath = keep;
+		return true;
+	}
 
 	public boolean listEvents(Player player) {
 		Iterator<EMSArenaEvent> i = events.iterator();
@@ -801,7 +823,10 @@ public class EMSArena implements ConfigurationSerializable {
 					// Reset the health here before the death screen gets displayed
 					player.setHealth(player.getMaxHealth());
 					plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, (Runnable) new EMSDeathRunner(player, this), 1);
-					
+					if (keepInvAfterDeath) {
+						playersDeathInv.put(player, new PlayerDeathInventory(player));
+					}
+
 					/*
 					 * Although the player is in limbo for 1 tick we can signal death & leave
 					 * events here as the player has already been removed from the team
@@ -815,10 +840,20 @@ public class EMSArena implements ConfigurationSerializable {
 				// Reset the health here before the death screen gets displayed
 				player.setHealth(player.getMaxHealth());
 				plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, (Runnable) new EMSDeathRunner(player, this), 1);
+				if (keepInvAfterDeath) {
+					playersDeathInv.put(player, new PlayerDeathInventory(player));
+				}
 			}
-			return true;
+			return keepInvAfterDeath;
 		}
 		return false;
+	}
+	
+	public void playerRespawn(Player player) {
+		if (keepInvAfterDeath && playersDeathInv.containsKey(player)) {
+			PlayerDeathInventory deathInv = playersDeathInv.get(player);
+			deathInv.restore();
+		}
 	}
 	
 	public EMSChatResponse playerChat(Player player, String message) {

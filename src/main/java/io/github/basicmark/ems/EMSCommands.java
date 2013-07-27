@@ -147,6 +147,12 @@ public class EMSCommands {
 					"<true/false> :- Set if players inventory should be kept when the event is over (when they re-enter the lobby) (default false)",
 					true,
 					"ems.editarena");
+		cmdProc.add("set-keep-inv-after-death",
+					new EMSSetKeepInvAfterDeath(),
+					1,
+					"<true/false> :- Set if players inventory should be kept when they die (default false)",
+					true,
+					"ems.editarena");
 		cmdProc.add("list-events",
 					new EMSListEvents(),
 					0,
@@ -492,6 +498,16 @@ public class EMSCommands {
     		return manager.arenaSetKeepInvAfterEvent(player, keepString);
     	}
     }
+	
+	public class EMSSetKeepInvAfterDeath implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		String keepString = args[0];
+    		
+    		return manager.arenaSetKeepInvAfterDeath(player, keepString);
+    	}
+    }
+	
 	
 	public class EMSListEvents implements CommandRunner {
     	public boolean run(CommandSender sender, String args[]) {

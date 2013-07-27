@@ -398,6 +398,21 @@ public class EMSManager {
 		return true;
 	}
 	
+	public boolean arenaSetKeepInvAfterDeath(Player player, String saveString) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
+			return true;
+		}
+
+		if (editState.arena.setKeepInvAfterDeath(Boolean.parseBoolean(saveString))) {
+			player.sendMessage(ChatColor.GREEN + "[EMS] Keep inv after death to " + saveString);
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Failed to set keep inv after death");
+		}
+		return true;
+	}
+	
 	public boolean arenaListEvents(Player player) {
 		EMSEditState editState = getArenaEditState(player, true);
 		if (editState == null) {
@@ -740,13 +755,26 @@ public class EMSManager {
 		}
 	}
 
-	public void playerDied(Player player) {
+	public boolean playerDied(Player player) {
 		Iterator<EMSArena> i = arenas.values().iterator();
 
 		while(i.hasNext()) {
 			EMSArena arena = i.next();
 
-			arena.playerDeath(player);
+			if (arena.playerDeath(player)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public void playerRespawn(Player player) {
+		Iterator<EMSArena> i = arenas.values().iterator();
+
+		while(i.hasNext()) {
+			EMSArena arena = i.next();
+
+			arena.playerRespawn(player);
 		}
 	}
 	

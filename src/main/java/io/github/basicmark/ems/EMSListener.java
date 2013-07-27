@@ -12,6 +12,7 @@ import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
 
@@ -40,7 +41,17 @@ public class EMSListener implements Listener {
 	public void onPlayerDeathEvent(PlayerDeathEvent event) {
 		Player player = event.getEntity();
 
-		manager.playerDied(player);
+		/* The following function will return true if the drops should be cleared */
+		if (manager.playerDied(player)) {
+			event.getDrops().clear();
+		}
+	}
+	
+	@EventHandler
+	public void onPlayerRespawnEvent(PlayerRespawnEvent event) {
+		Player player = event.getPlayer();
+		
+		manager.playerRespawn(player);
 	}
 	
 	@EventHandler
