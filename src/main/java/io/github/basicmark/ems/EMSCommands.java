@@ -198,6 +198,12 @@ public class EMSCommands {
 					"<trigger> <mob name> <num>:- Add a mob spawn event",
 					true,
 					"ems.editarena");
+		cmdProc.add("add-check-teamplayer-count",
+					new EMSAddCheckTeamPlayerCount(),
+					4,
+					"<team/player> <trigger> <count> <created event>:- Add a check for the number of teams/players remaining",
+					true,
+					"ems.editarena");		
 		cmdProc.add("end-edit",
 					new EMSCloseArenaForEdit(),
 					0,
@@ -570,6 +576,18 @@ public class EMSCommands {
     		String mobCount =  args[2];
 
     		return manager.arenaAddEntitySpawn(player, eventTrigger, mobName, mobCount);
+    	}
+    }
+    
+    public class EMSAddCheckTeamPlayerCount implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		String teamPlayer = args[0];
+    		String eventTrigger = args[1];
+    		String count =  args[2];
+    		String createEvent = args[3];
+
+    		return manager.arenaAddCheckTeamPlayerCount(player, teamPlayer, eventTrigger, count, createEvent);
     	}
     }
 	

@@ -359,6 +359,10 @@ public class EMSTeam implements ConfigurationSerializable {
 		return players;
 	}
 	
+	public int getPlayerCount() {
+		return players.size();
+	}
+	
 	public void spawnPlayers() {
 		if (hasSpawn()) {
 			SpawnMethod.spawnPlayers(spawnMethod, players, spawns);

@@ -1,6 +1,8 @@
 package io.github.basicmark.ems;
 
 import io.github.basicmark.config.PlayerState;
+import io.github.basicmark.ems.arenaevents.EMSAutoEnd;
+import io.github.basicmark.ems.arenaevents.EMSCheckTeamPlayerCount;
 import io.github.basicmark.ems.arenaevents.EMSClearRegion;
 import io.github.basicmark.ems.arenaevents.EMSEventBlock;
 import io.github.basicmark.ems.arenaevents.EMSMessenger;
@@ -49,6 +51,8 @@ public class EMSManager {
 		ConfigurationSerialization.registerClass(EMSTeleport.class);
 		ConfigurationSerialization.registerClass(EMSSpawnEntity.class);
 		ConfigurationSerialization.registerClass(PlayerState.class);
+		ConfigurationSerialization.registerClass(EMSAutoEnd.class);
+		ConfigurationSerialization.registerClass(EMSCheckTeamPlayerCount.class);
 	}
 	EMSArenaLoader loader;
 	HashMap<Player, EMSEditState> arenaEditState;
@@ -565,6 +569,30 @@ public class EMSManager {
 		return true;
 	}
 	
+	public boolean arenaAddCheckTeamPlayerCount(Player player, String teamPlayer, String eventTrigger, String countString, String createEvent) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
+			return true;
+		}
+		
+		boolean team;
+		if (teamPlayer.equalsIgnoreCase("team")) {
+			team = true;
+		} else if (teamPlayer.equalsIgnoreCase("player")) {
+			team = false;
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Expected team or player but got " + teamPlayer);
+			return true;
+		}
+		
+		int count = Integer.parseInt(countString);
+		
+		editState.arena.addCheckTeamPlayerCount(team, eventTrigger, count, createEvent);
+		player.sendMessage(ChatColor.GREEN + "[EMS] Added team/player check");
+		return true;
+	}
+	
 	public boolean arenaJoin(Player player, String arenaName) {
 		EMSArena arena = getArena(player, arenaName);
 		if (arena == null) {
@@ -842,6 +870,7 @@ public class EMSManager {
 
 			Bukkit.getLogger().info("[EMS] Unloading " + arenaName);
 			arena.disable();
+			arena.destroy();
 			i.remove();
 		}
 		

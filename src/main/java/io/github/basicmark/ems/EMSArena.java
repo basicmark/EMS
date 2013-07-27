@@ -5,6 +5,8 @@ import io.github.basicmark.config.PlayerState;
 import io.github.basicmark.config.PlayerStateLoader;
 import io.github.basicmark.ems.EMSArenaState;
 import io.github.basicmark.ems.arenaevents.EMSArenaEvent;
+import io.github.basicmark.ems.arenaevents.EMSAutoEnd;
+import io.github.basicmark.ems.arenaevents.EMSCheckTeamPlayerCount;
 import io.github.basicmark.ems.arenaevents.EMSClearRegion;
 import io.github.basicmark.ems.arenaevents.EMSEventBlock;
 import io.github.basicmark.ems.arenaevents.EMSMessenger;
@@ -88,8 +90,9 @@ public class EMSArena implements ConfigurationSerializable {
 		this.saveXP = true;
 		this.saveHealth= true; 
 		
-		// Add tracking by default
+		// Add tracking and auto-end by default
 		events.add(new EMSTracker(this));
+		events.add(new EMSAutoEnd(this));
 	}
 
 	@SuppressWarnings("unchecked")
@@ -309,6 +312,8 @@ public class EMSArena implements ConfigurationSerializable {
 			return false;
 		}
 
+		EMSArenaEvent removal = events.get(eventIndex);
+		removal.destroy();
 		events.remove(eventIndex);
 		return true;
 	}
@@ -356,6 +361,12 @@ public class EMSArena implements ConfigurationSerializable {
 		EMSSpawnEntity spawnEntity = new EMSSpawnEntity(this, eventTrigger, location, entity, count);
 		events.add(spawnEntity);
 		return true;	
+	}
+	
+	public boolean addCheckTeamPlayerCount(boolean team, String eventTrigger, int count, String createEvent) {
+		EMSCheckTeamPlayerCount checkTeamPlayerCount = new EMSCheckTeamPlayerCount(this, team, eventTrigger, count, createEvent);
+		events.add(checkTeamPlayerCount);
+		return true;
 	}
 	
 	public boolean addPotionEffect(String eventTrigger, PotionEffectType effect, int duration, int amplifier) {
@@ -540,6 +551,18 @@ public class EMSArena implements ConfigurationSerializable {
 		}
 		updateStatus(EMSArenaState.CLOSED);
 	}
+
+	public void destroy() {
+		Iterator<EMSArenaEvent> i = events.iterator();
+		
+		/*
+		 * Destroy any events which where created
+		 */
+		while (i.hasNext()) {
+			EMSArenaEvent removal = i.next();
+			removal.destroy();
+		}
+	}
 	
 	public void forceTeamCap(int capSize) {
 		Iterator<EMSTeam> i = teams.values().iterator();
@@ -668,6 +691,14 @@ public class EMSArena implements ConfigurationSerializable {
 			playersInLobby.remove(player);
 			playerLeaveArenaDo(player);
 		}
+		
+		/*
+		 * If the player left an active event then signal to that event
+		 * that a player has left so it can act accordingly
+		 */
+		if (arenaState == EMSArenaState.ACTIVE) {
+			signalEvent("player-leave");
+		}
 	}
 
 	public void playerJoinTeam(Player player, String teamName) {
@@ -762,7 +793,13 @@ public class EMSArena implements ConfigurationSerializable {
 					inventory.clear();
 					*/
 					plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, (Runnable) new EMSDeathRunner(player, this), 1);
+					
+					/*
+					 * Although the player is in limbo for 1 tick we can signal death & leave
+					 * events here as the player has already been removed from the team
+					 */
 					signalEvent("player-death");
+					signalEvent("player-leave");
 				}
 			}
 			return true;
@@ -839,6 +876,31 @@ public class EMSArena implements ConfigurationSerializable {
 
 	public void removeProtection(Location location) { 
 		protections.remove(location);
+	}
+	
+	public int getActiveTeamCount() {
+		Iterator<EMSTeam> i = teams.values().iterator();
+		int activeTeams = 0;
+
+		while(i.hasNext()) {
+			EMSTeam team = i.next();
+			if (team.getPlayerCount() > 0) {
+				activeTeams++;
+			}
+		}
+		return activeTeams;
+	}
+
+	public int getActivePlayerCount() {
+		Iterator<EMSTeam> i = teams.values().iterator();
+		int activePlayers = 0;
+
+		while(i.hasNext()) {
+			EMSTeam team = i.next();
+
+			activePlayers += team.getPlayerCount();
+		}
+		return activePlayers;
 	}
 	
 	public JavaPlugin getPlugin() {
