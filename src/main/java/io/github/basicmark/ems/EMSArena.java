@@ -708,6 +708,7 @@ public class EMSArena implements ConfigurationSerializable {
 		player.sendMessage(ChatColor.GREEN + "[EMS] Bye, thanks for playing!");
 		player.teleport(playersLoc.get(player));
 		playersLoc.remove(player);
+		playersDeathInv.remove(player);
 		PlayerState state = playerLoader.load(player);
 		if (state != null) {
 			state.restore(player);
@@ -850,9 +851,10 @@ public class EMSArena implements ConfigurationSerializable {
 	}
 	
 	public void playerRespawn(Player player) {
-		if (keepInvAfterDeath && playersDeathInv.containsKey(player)) {
+		if (playerInArena(player) && keepInvAfterDeath && playersDeathInv.containsKey(player)) {
 			PlayerDeathInventory deathInv = playersDeathInv.get(player);
 			deathInv.restore();
+			playersDeathInv.remove(player);
 		}
 	}
 	
