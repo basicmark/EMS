@@ -371,6 +371,21 @@ public class EMSManager {
 		return true;
 	}
 	
+	public boolean arenaSetKeepInvAfterEvent(Player player, String saveString) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
+			return true;
+		}
+
+		if (editState.arena.setKeepInvAfterEvent(Boolean.parseBoolean(saveString))) {
+			player.sendMessage(ChatColor.GREEN + "[EMS] Keep inv after event to " + saveString);
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Failed to set keep inv after event");
+		}
+		return true;
+	}
+	
 	public boolean arenaListEvents(Player player) {
 		EMSEditState editState = getArenaEditState(player, true);
 		if (editState == null) {

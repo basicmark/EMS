@@ -135,6 +135,12 @@ public class EMSCommands {
 					"<true/false> :- Set if health and hunger should be saved and restored for this arena (default true)",
 					true,
 					"ems.editarena");
+		cmdProc.add("set-keep-inv-after-event",
+					new EMSSetKeepInvAfterEvent(),
+					1,
+					"<true/false> :- Set if players inventory should be kept when the event is over (when they re-enter the lobby) (default false)",
+					true,
+					"ems.editarena");
 		cmdProc.add("list-events",
 					new EMSListEvents(),
 					0,
@@ -460,6 +466,15 @@ public class EMSCommands {
     		String saveString = args[0];
     		
     		return manager.arenaSetSaveHealth(player, saveString);
+    	}
+    }
+	
+	public class EMSSetKeepInvAfterEvent implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		String keepString = args[0];
+    		
+    		return manager.arenaSetKeepInvAfterEvent(player, keepString);
     	}
     }
 	

@@ -51,6 +51,7 @@ public class EMSArena implements ConfigurationSerializable {
 	protected boolean saveInventory;
 	protected boolean saveXP;
 	protected boolean saveHealth;
+	protected boolean keepInvAfterEvent;
 	protected HashMap<String, EMSTeam> teams;
 	protected List<EMSArenaEvent> events;
 	
@@ -89,6 +90,7 @@ public class EMSArena implements ConfigurationSerializable {
 		this.saveInventory = true;
 		this.saveXP = true;
 		this.saveHealth= true; 
+		this.keepInvAfterEvent = false;
 		
 		// Add tracking and auto-end by default
 		events.add(new EMSTracker(this));
@@ -119,6 +121,11 @@ public class EMSArena implements ConfigurationSerializable {
 			this.saveHealth = (boolean) values.get("savehealth");
 		} catch (Exception e) {
 			this.saveHealth = true;
+		}
+		try {
+			this.keepInvAfterEvent = (boolean) values.get("keepinvafterevent");
+		} catch (Exception e) {
+			this.keepInvAfterEvent = false;
 		}
 		
 		this.teams = new HashMap<String, EMSTeam>();
@@ -156,6 +163,7 @@ public class EMSArena implements ConfigurationSerializable {
 		values.put("saveinventory", saveInventory);
 		values.put("savexp", saveXP);
 		values.put("savehealth", saveHealth);
+		values.put("keepinvafterevent", keepInvAfterEvent);
 		values.put("requiresteamlobby", requiresTeamLobby);
 		values.put("teamcount", teams.size());
 
@@ -295,7 +303,12 @@ public class EMSArena implements ConfigurationSerializable {
 		this.saveHealth = save;
 		return true;
 	}
-	
+
+	public boolean setKeepInvAfterEvent(boolean keep) {
+		this.keepInvAfterEvent = keep;
+		return true;
+	}	
+
 	public boolean listEvents(Player player) {
 		Iterator<EMSArenaEvent> i = events.iterator();
 		int j = 0;
@@ -927,6 +940,15 @@ public class EMSArena implements ConfigurationSerializable {
 			player.removePotionEffect(effect.getType());
 		}
 		player.setVelocity(new Vector(0, 0, 0));
+
+		/* Clear down a players inventory when they rejoin the lobby if required */
+		if (!keepInvAfterEvent) {
+			player.getInventory().clear();
+			player.getInventory().setHelmet(null);
+			player.getInventory().setChestplate(null);
+			player.getInventory().setLeggings(null);
+			player.getInventory().setBoots(null);
+		}
 	}
 
 	private boolean arenaCommandValid(Player player, boolean shouldBeInArena) {
