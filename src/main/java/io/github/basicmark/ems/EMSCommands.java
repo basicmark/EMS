@@ -61,6 +61,12 @@ public class EMSCommands {
 					":- Set the lobby of the arena",
 					true,
 					"ems.editarena");
+		cmdProc.add("set-lobby-respawn",
+					new EMSSetLobbyRespawn(),
+					1,
+					"<true/false> :- Respawn a player in the lobby if they die there",
+					true,
+					"ems.editarena");
 		cmdProc.add("set-team-lobby-required",
 					new EMSSetTeamLobbyRequired(),
 					1,
@@ -332,7 +338,16 @@ public class EMSCommands {
     		return manager.arenaSetLobby(player);
     	}
     }
+	
+	public class EMSSetLobbyRespawn implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		String respawnString = args[0];
 
+    		return manager.arenaSetLobbyRespawn(player, respawnString);
+    	}
+    }
+		
 	public class EMSSetTeamLobbyRequired implements CommandRunner {
     	public boolean run(CommandSender sender, String args[]) {
     		Player player = (Player) sender;

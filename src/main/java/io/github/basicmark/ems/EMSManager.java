@@ -212,6 +212,18 @@ public class EMSManager {
 		player.sendMessage(ChatColor.GREEN + "[EMS] Arena lobby set");
 		return true;
 	}
+	
+	public boolean arenaSetLobbyRespawn(Player player, String respawnString) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
+			return true;
+		}
+		
+		editState.arena.setLobbyRespawn(Boolean.parseBoolean(respawnString));
+		player.sendMessage(ChatColor.GREEN + "[EMS] Set lobby respawn to " + respawnString);
+		return true;
+	}
 
 	public boolean arenaSetTeamLobbyRequired(Player player, Boolean required) {
 		EMSEditState editState = getArenaEditState(player, true);

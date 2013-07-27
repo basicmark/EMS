@@ -52,6 +52,7 @@ public class EMSArena implements ConfigurationSerializable {
 	protected boolean saveXP;
 	protected boolean saveHealth;
 	protected boolean keepInvAfterEvent;
+	protected boolean lobbyRespawn;
 	protected HashMap<String, EMSTeam> teams;
 	protected List<EMSArenaEvent> events;
 	
@@ -91,6 +92,7 @@ public class EMSArena implements ConfigurationSerializable {
 		this.saveXP = true;
 		this.saveHealth= true; 
 		this.keepInvAfterEvent = false;
+		this.lobbyRespawn = false;
 		
 		// Add tracking and auto-end by default
 		events.add(new EMSTracker(this));
@@ -126,6 +128,11 @@ public class EMSArena implements ConfigurationSerializable {
 			this.keepInvAfterEvent = (boolean) values.get("keepinvafterevent");
 		} catch (Exception e) {
 			this.keepInvAfterEvent = false;
+		}
+		try {
+			this.lobbyRespawn = (boolean) values.get("lobbyrespawn");
+		} catch (Exception e) {
+			this.lobbyRespawn = false;
 		}
 		
 		this.teams = new HashMap<String, EMSTeam>();
@@ -208,6 +215,10 @@ public class EMSArena implements ConfigurationSerializable {
 	// Arena setup functions
 	public void setLobby(Player player) {
 		lobby = player.getLocation();
+	}
+	
+	public void setLobbyRespawn(boolean lobbyRespawn) {
+		this.lobbyRespawn = lobbyRespawn;
 	}
 	
 	public void addTeam(String name, String displayName) {
@@ -780,31 +791,15 @@ public class EMSArena implements ConfigurationSerializable {
 	
 	public boolean playerDeath(Player player) {
 		if (playerInArena(player)) {
+			boolean inTeam = false;
 			Iterator<EMSTeam> i = teams.values().iterator();
 			while(i.hasNext()) {
 				EMSTeam team = i.next();
 				if (team.isPlayerInTeam(player)) {
 					team.playerDeath(player);
+
 					// Reset the health here before the death screen gets displayed
 					player.setHealth(player.getMaxHealth());
-					//player.teleport(loc);
-					
-					/*
-					 *  Using the death item drop doesn't seem to work so force drop all
-					 *  the items now and then clear the inv
-					 */
-					/*
-					PlayerInventory inventory= player.getInventory();
-					Iterator<ItemStack> is = inventory.iterator();
-					while(is.hasNext()) {
-						ItemStack itemStack = is.next();
-						if (itemStack != null) {
-							player.sendMessage("Dropping " + itemStack.getAmount() + " of " + itemStack.getType().toString());
-							player.getWorld().dropItem(player.getLocation(), itemStack);
-						}
-					}
-					inventory.clear();
-					*/
 					plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, (Runnable) new EMSDeathRunner(player, this), 1);
 					
 					/*
@@ -813,7 +808,13 @@ public class EMSArena implements ConfigurationSerializable {
 					 */
 					signalEvent("player-death");
 					signalEvent("player-leave");
+					inTeam = true;
 				}
+			}
+			if ((!inTeam) && lobbyRespawn) {
+				// Reset the health here before the death screen gets displayed
+				player.setHealth(player.getMaxHealth());
+				plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, (Runnable) new EMSDeathRunner(player, this), 1);
 			}
 			return true;
 		}
