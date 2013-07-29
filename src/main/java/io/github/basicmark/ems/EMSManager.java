@@ -829,9 +829,9 @@ public class EMSManager {
 			ItemStack heldItem = inventory.getItem(inventory.getHeldItemSlot());
 
 			if (heldItem != null) {
-				if ((heldItem.getType() == Material.STICK) && (heldItem.getItemMeta().hasDisplayName()))
+				if ((heldItem.getType() == Material.STICK) && (heldItem.getItemMeta().hasDisplayName()) && player.hasPermission("ems.editarena"))
 				{
-					if (heldItem.getItemMeta().getDisplayName().equals("Wand"));
+					if (heldItem.getItemMeta().getDisplayName().equals("Wand"))
 					{
 						Block clickedBlock = event.getClickedBlock();
 						EMSEditState editState = getArenaEditState(player, true);
