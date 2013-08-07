@@ -9,6 +9,7 @@ import io.github.basicmark.ems.arenaevents.EMSAutoEnd;
 import io.github.basicmark.ems.arenaevents.EMSCheckTeamPlayerCount;
 import io.github.basicmark.ems.arenaevents.EMSClearRegion;
 import io.github.basicmark.ems.arenaevents.EMSEventBlock;
+import io.github.basicmark.ems.arenaevents.EMSLightningEffect;
 import io.github.basicmark.ems.arenaevents.EMSMessenger;
 import io.github.basicmark.ems.arenaevents.EMSPotionEffect;
 import io.github.basicmark.ems.arenaevents.EMSSpawnEntity;
@@ -412,6 +413,12 @@ public class EMSArena implements ConfigurationSerializable {
 	public boolean addCheckTeamPlayerCount(boolean team, String eventTrigger, int count, String createEvent) {
 		EMSCheckTeamPlayerCount checkTeamPlayerCount = new EMSCheckTeamPlayerCount(this, team, eventTrigger, count, createEvent);
 		events.add(checkTeamPlayerCount);
+		return true;
+	}
+	
+	public boolean addLightningEffect(String eventTrigger, Location location) {
+		EMSLightningEffect lightningEffect = new EMSLightningEffect(this, eventTrigger, location);
+		events.add(lightningEffect);
 		return true;
 	}
 	

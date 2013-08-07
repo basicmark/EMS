@@ -222,6 +222,12 @@ public class EMSCommands {
 					"<team/player> <trigger> <count> <created event>:- Add a check for the number of teams/players remaining",
 					true,
 					"ems.editarena");		
+		cmdProc.add("add-lightning-effect",
+					new EMSAddLightningEffect(),
+					1,
+					"<trigger> :- Add lightning effect at your current location)",
+					true,
+					"ems.editarena");
 		cmdProc.add("end-edit",
 					new EMSCloseArenaForEdit(),
 					0,
@@ -634,6 +640,15 @@ public class EMSCommands {
     		String createEvent = args[3];
 
     		return manager.arenaAddCheckTeamPlayerCount(player, teamPlayer, eventTrigger, count, createEvent);
+    	}
+    }
+    
+    public class EMSAddLightningEffect implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		String eventTrigger = args[0];
+
+    		return manager.arenaAddLightningEffect(player, eventTrigger);
     	}
     }
 	
