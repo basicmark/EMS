@@ -31,6 +31,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
 import org.bukkit.block.Sign;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.serialization.ConfigurationSerializable;
@@ -58,6 +59,10 @@ public class EMSArena implements ConfigurationSerializable {
 	protected boolean keepInvAfterDeath;
 	protected HashMap<String, EMSTeam> teams;
 	protected List<EMSArenaEvent> events;
+	protected Location joinSignLocation;
+	protected String welcomeMessage;
+	protected String leaveMessage;;
+	
 	
 	/*
 	 *  Note:
@@ -99,6 +104,9 @@ public class EMSArena implements ConfigurationSerializable {
 		this.keepInvAfterEvent = false;
 		this.lobbyRespawn = false;
 		this.keepInvAfterDeath = false;
+		this.joinSignLocation = null;
+		this.welcomeMessage = null;
+		this.welcomeMessage = null;
 		
 		// Add tracking and auto-end by default
 		events.add(new EMSTracker(this));
@@ -145,6 +153,31 @@ public class EMSArena implements ConfigurationSerializable {
 		} catch (Exception e) {
 			this.keepInvAfterDeath = false;
 		}
+
+		// Get optional config data for join sign
+		Map<String, Object> joinSignData;
+		try {
+			joinSignData = (Map<String, Object>) values.get("joinsign");
+		} catch (Exception e) {
+			joinSignData = null;
+		}
+
+		this.joinSignLocation = ConfigUtils.DeserializeLocation(joinSignData);
+		if (this.joinSignLocation != null) {
+			addProtection(joinSignLocation);
+		}
+		
+		try {
+			this.welcomeMessage = (String) values.get("welcomemessage");
+		} catch (Exception e) {
+			welcomeMessage = null;
+		} 
+
+		try {
+			this.leaveMessage = (String) values.get("leavemessage");
+		} catch (Exception e) {
+			leaveMessage = null;
+		}
 		
 		this.teams = new HashMap<String, EMSTeam>();
 		int teamCount = (int) values.get("teamcount");
@@ -187,6 +220,17 @@ public class EMSArena implements ConfigurationSerializable {
 		values.put("lobbyrespawn", lobbyRespawn);
 		values.put("keepinvafterdeath", keepInvAfterDeath);
 
+		if (joinSignLocation != null) {
+			values.put("joinsign", ConfigUtils.SerializeLocation(joinSignLocation));
+		}
+
+		if (welcomeMessage != null) {
+			values.put("welcomemessage", welcomeMessage);
+		}
+		if (leaveMessage != null) {
+			values.put("leavemessage", leaveMessage);
+		}
+		
 		/* Team management settings */
 		values.put("requiresteamlobby", requiresTeamLobby);
 		values.put("teamcount", teams.size());
@@ -251,7 +295,15 @@ public class EMSArena implements ConfigurationSerializable {
 	public void setRequiresTeamSpawn(boolean required) {
 		requiresTeamSpawn = required;
 	}
+	
+	public void setWelcomeMessage(String message) {
+		welcomeMessage = message;
+	}
 
+	public void setLeaveMessage(String message) {
+		leaveMessage = message;
+	}
+	
 	public boolean removeTeam(String teamName) {
 		if (!teams.containsKey(teamName)) {
 			return false;
@@ -370,9 +422,12 @@ public class EMSArena implements ConfigurationSerializable {
 		events.add(messageEvent);
 		return true;
 	}
-	
-	public boolean addTimer(String eventTrigger, String createName, boolean inSeconds, int[] timeArray, String displayName) {
-		EMSTimer timerEvent = new EMSTimer(this, eventTrigger, createName, inSeconds, timeArray, displayName);
+
+	public boolean addTimer(String eventTrigger, String createName, boolean inSeconds, boolean repeat, String timeString, String displayName) {
+		EMSTimer timerEvent = new EMSTimer(this, eventTrigger, createName, inSeconds, repeat, timeString, displayName);
+		if (!timerEvent.parseTimeString()) {
+			return false;
+		}
 		events.add(timerEvent);
 		return true;
 	}
@@ -429,82 +484,116 @@ public class EMSArena implements ConfigurationSerializable {
 	}
 	
 	// Sign management
+	private boolean setJoinSign(Location location) {
+		if (location != null) {
+			if (joinSignLocation != null) {
+				// Removing protection on the old location
+				removeProtection(joinSignLocation);
+			}
+			// Adding the join sign so add it to the protected block list
+			addProtection(location);
+			joinSignLocation = location;
+			updateStatusSign();
+		} else {
+			// Removing the join sign so remove it from the protected block list
+			if (joinSignLocation != null) {
+				removeProtection(joinSignLocation);
+			}
+			joinSignLocation = null;
+		}
+		return false;
+	}
+
+	private Location getJoinSign() {
+		return joinSignLocation;
+	}
+	
+	public void updateStatusSign() {
+		if (getJoinSign() == null) {
+			return;
+		}
+
+		Block block = getJoinSign().getBlock();
+
+		if ((block.getType() == Material.WALL_SIGN) || (block.getType() == Material.SIGN_POST)) {
+			BlockState state = block.getState();
+			Sign sign = (Sign) state;
+
+			sign.setLine(0, arenaState.toColourString());
+			sign.setLine(1, name);
+			sign.setLine(2, "");
+			sign.setLine(3, playersInLobby.size() + " players");
+			sign.update(true);	
+		} else {
+			// The sign has gone! Remove it from the team so we don't try again.
+			setJoinSign(null);
+		}
+	}
+
+	
 	public boolean signUpdated(Block block, String[] lines) {
-		String teamName = lines[2];
-		if (teams.containsKey(teamName)) {
-			EMSTeam team = teams.get(teamName);
+		String line2 = lines[2];
+		if (line2.toLowerCase().equals("[join]")) {
+			setJoinSign(block.getLocation());
+			return true;
+		} else if (teams.containsKey(line2)) {
+			EMSTeam team = teams.get(line2);
 
 			team.setJoinSign(block.getLocation());
-			/*
-			updateSign(block, team);
-			*/
 			return true;
 		}
 
 		return false;
 	}
 	
-	/*
-	public void updateSign(Block block, EMSTeam team) {
-
-		if ((block.getType() == Material.SIGN) || (block.getType() == Material.SIGN_POST)) {
-			BlockState state = block.getState();
-			Sign sign = (Sign) state;
-
-			sign.setLine(0, team.getState.toColourString());
-			sign.setLine(1, name);
-
-			sign.setLine(2, team.getDisplayName());
-			sign.setLine(3, "Click to join!");
-			sign.update(true);	
-		} else {
-			// The sign has gone! Remove it from the team so we don't try again.
-			team.setJoinSign(null);
-		}
-	}
-	*/
-	
 	public void updateStatus(EMSArenaState newState) {
 		Iterator<EMSTeam> i = teams.values().iterator();
-
+		
+		// Update the per team signs
 		arenaState = newState;
+
+		// Update the arena join sign
+		updateStatusSign();
+
+		// Update the per team signs
 		while(i.hasNext()) {
 			EMSTeam team = i.next();
 			team.updateStatus(newState);
-			/*
-			Location signLoc = team.getJoinSign();
-			if (signLoc != null) {
-				updateSign(signLoc.getBlock(), team);
-			}
-			*/
 		}
 	}
 
 	public boolean signClicked(Sign sign, Player player) {
 		boolean consumeEvent = false;
-		if (!playersInLobby.contains(player)) {
-			// Only if a player is in the lobby can they join a team
-			player.sendMessage(ChatColor.RED + "Your not in the lobby!");
-			return false;
-		}
-		
+		String teamName = sign.getLine(2);		
+
 		if (arenaState != EMSArenaState.OPEN) {
 			player.sendMessage(ChatColor.RED + " arena is " + arenaState.toString().toLowerCase());
 			return false;
 		}
 
-		String teamName = sign.getLine(2);
-		Iterator<EMSTeam> i = teams.values().iterator();
-		while (i.hasNext()) {
-			EMSTeam team = i.next();
+		// If there is no team name then it must be an arena join sign
+		if (teamName.equals("")) {
+			playerJoinArena(player);
+			return true;
+		} else {
+			if (!playersInLobby.contains(player)) {
+				// Only if a player is in the lobby can they join a team
+				player.sendMessage(ChatColor.RED + "You're not in the lobby!");
+				return false;
+			}
 
-			if (team.getDisplayName().equals(teamName)) {
-				if (team.addPlayer(player)) {
-					playersInLobby.remove(player);
-				} else {
-					player.sendMessage(ChatColor.RED + " failed to add you to team " + teamName);
+			Iterator<EMSTeam> i = teams.values().iterator();
+			while (i.hasNext()) {
+				EMSTeam team = i.next();
+
+				if (team.getDisplayName().equals(teamName)) {
+					if (team.addPlayer(player)) {
+						playersInLobby.remove(player);
+					} else {
+						player.sendMessage(ChatColor.RED + " failed to add you to team " + teamName);
+					}
+					consumeEvent = true;
 				}
-				consumeEvent = true;
 			}
 		}
 
@@ -519,6 +608,13 @@ public class EMSArena implements ConfigurationSerializable {
 				return true;
 			}
 		} else {
+			// Check if the block is the join sign of the arena
+			if (getJoinSign() != null) {
+				if (getJoinSign().equals(location)) {
+					setJoinSign(null);
+				}
+			}
+			
 			// Check if the block is the join sign of a team
 			Iterator<EMSTeam> i = teams.values().iterator();
 			while (i.hasNext()) {
@@ -598,7 +694,7 @@ public class EMSArena implements ConfigurationSerializable {
 		while(pi.hasNext()) {
 			Player player = pi.next();
 
-			player.sendMessage(ChatColor.RED + "[EMS] The arena your in is being disabled");
+			player.sendMessage(ChatColor.RED + "[EMS] The arena you're in is being disabled");
 			playerLeaveArenaDo(player);
 			pi.remove();
 		}
@@ -681,6 +777,7 @@ public class EMSArena implements ConfigurationSerializable {
 	}
 	
 	// Player functions
+	@SuppressWarnings("deprecation")
 	public void playerJoinArena(Player player) {
 		if (!arenaCommandValid(player, false)) {
 			return;
@@ -690,7 +787,18 @@ public class EMSArena implements ConfigurationSerializable {
 		playersLoc.put(player, player.getLocation());
 		player.teleport(lobby);
 		playerLoader.save(player, new PlayerState(player, saveInventory, saveXP, saveHealth));
-		player.sendMessage(ChatColor.GREEN + "[EMS] Welcome to arena " + name);
+		player.sendMessage(ChatColor.GREEN + "[EMS] You have joined " + name);
+		if (welcomeMessage != null) {
+			player.sendMessage(ChatColor.GOLD + welcomeMessage);
+		}
+		
+		// Force an inventory update as if the play joins via a sign although their inventory
+		// gets cleared the player will still see it a ghost form, the only way to do this is
+		// to use a deprecated function :(
+		player.updateInventory();
+		
+		// Update the arena status sign
+		updateStatusSign();
 	}
 
 	public boolean playerInArena(Player player) {
@@ -712,7 +820,10 @@ public class EMSArena implements ConfigurationSerializable {
 	 * Set the player in the right state when they leave the arena
 	 */
 	public void playerLeaveArenaDo(Player player) {
-		player.sendMessage(ChatColor.GREEN + "[EMS] Bye, thanks for playing!");
+		player.sendMessage(ChatColor.GREEN + "[EMS] You have now left the arena");
+		if (leaveMessage != null) {
+			player.sendMessage(ChatColor.GOLD + leaveMessage);
+		}
 		player.teleport(playersLoc.get(player));
 		playersLoc.remove(player);
 		playersDeathInv.remove(player);
@@ -721,6 +832,9 @@ public class EMSArena implements ConfigurationSerializable {
 			state.restore(player);
 			playerLoader.delete(player);
 		}
+
+		// Update the arena status sign
+		updateStatusSign();
 	}
 	
 	/*
@@ -765,7 +879,7 @@ public class EMSArena implements ConfigurationSerializable {
 		while(i.hasNext()) {
 			EMSTeam team = i.next();
 			if (team.isPlayerInTeam(player)) {
-				player.sendMessage("[EMS] Your already in team " + team.getName());
+				player.sendMessage("[EMS] You're already in team " + team.getName());
 				return;
 			}
 		}
@@ -1004,12 +1118,12 @@ public class EMSArena implements ConfigurationSerializable {
 
 		if (shouldBeInArena) {
 			if (!playerInArena(player)) {
-				player.sendMessage(ChatColor.RED + "[EMS] Your not in an arena!");
+				player.sendMessage(ChatColor.RED + "[EMS] You're not in an arena!");
 				return false;
 			}
 		} else {
 			if (playerInArena(player)) {
-				player.sendMessage(ChatColor.RED + "[EMS] Your already in this arena!");
+				player.sendMessage(ChatColor.RED + "[EMS] You're already in this arena!");
 				return false;
 			}
 		}

@@ -5,8 +5,6 @@ import io.github.basicmark.ems.EMSArena;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import org.bukkit.Bukkit;
-
 public class EMSCheckTeamPlayerCount implements EMSArenaEvent{
 	// Dynamic data
 	EMSArena arena;
@@ -44,7 +42,6 @@ public class EMSCheckTeamPlayerCount implements EMSArenaEvent{
 	}
 	
 	public void signalEvent(String trigger) {
-		Bukkit.getLogger().info("fired = " + fired);
 		if (team) {
 			if ((trigger.equals(triggerEvent)) && (count >= arena.getActiveTeamCount()) && (!fired)) {
 				fired = true;

@@ -79,6 +79,20 @@ public class EMSCommands {
 					"<true/false> :- Are team spawn points required for this arena?",
 					true,
 					"ems.editarena");
+		cmdProc.add("welcome-message",
+					new EMSWelcomeMessage(),
+					0,
+					50,
+					"<Welcome message> :- Set the welcome message (if run without a message it will clear the current message)",
+					true,
+					"ems.editarena");
+		cmdProc.add("leave-message",
+					new EMSLeaveMessage(),
+					0,
+					50,
+					"<Leave message> :- Set the leave message (if run without a message it will clear the current message)",
+					true,
+					"ems.editarena");
 		// Arena team modification functions
 		cmdProc.add("add-team",
 					new EMSAddTeam(),
@@ -174,9 +188,9 @@ public class EMSCommands {
 					"ems.editarena");
 		cmdProc.add("add-timer",
 					new EMSAddTimer(),
-					3,
+					5,
 					50,
-					"<trigger> <created event> <list,of,times,in,min> [event name] :- Add a timer",
+					"<trigger> <created event> <sec/min> <single/repeat> <list,of,times> [event display name] :- Add a timer",
 					true,
 					"ems.editarena");
 		cmdProc.add("add-event-block",
@@ -397,6 +411,44 @@ public class EMSCommands {
     	}
     }
 	
+	public class EMSWelcomeMessage implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		String message = null;
+    		
+    		// The message will have spaces which get split so rejoin the string
+    		if (args.length == 0) {
+    			message = null;
+    		} else {
+    			message = args[0];
+    			for (int i = 1;i<args.length;i++) {
+    				message = message + " " + args[i];
+    			}
+    		}
+    		
+    		return manager.arenaSetWelcomeMessage(player, message);
+    	}
+    }
+
+	public class EMSLeaveMessage implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		String message;
+
+    		// The message will have spaces which get split so rejoin the string
+    		if (args.length == 0) {
+    			message = null;
+    		} else {
+    			message = args[0];
+    			for (int i = 1;i<args.length;i++) {
+    				message = message + " " + args[i];
+    			}
+    		}
+    		
+    		return manager.arenaSetLeaveMessage(player, message);
+    	}
+    }
+	
 	public class EMSAddTeam implements CommandRunner {
     	public boolean run(CommandSender sender, String args[]) {   		
     		Player player = (Player) sender;
@@ -552,18 +604,19 @@ public class EMSCommands {
     		Player player = (Player) sender;
        		String eventTrigger = args[0];
     		String createName = args[1];
-    		String inSeconds =  args[2];
-    		String timeString = args[3];
+    		String timeUnit =  args[2];
+    		String timerMode =  args[3];
+    		String timeString = args[4];
     		String displayName = null;
     		
     		if (args.length >= 5) {
-    			displayName = args[4];
-    			for (int i = 5;i< args.length;i++) {
+    			displayName = args[5];
+    			for (int i = 6;i< args.length;i++) {
     				displayName = displayName + " " + args[i];
     			}
     		}
     		
-    		return manager.arenaAddTimer(player, eventTrigger, createName, inSeconds, timeString, displayName);
+    		return manager.arenaAddTimer(player, eventTrigger, createName, timeUnit, timerMode, timeString, displayName);
     	}
 	}
 

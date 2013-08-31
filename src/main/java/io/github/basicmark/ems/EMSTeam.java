@@ -235,7 +235,7 @@ public class EMSTeam implements ConfigurationSerializable {
 
 		Block block = getJoinSign().getBlock();
 
-		if ((block.getType() == Material.SIGN) || (block.getType() == Material.SIGN_POST)) {
+		if ((block.getType() == Material.WALL_SIGN) || (block.getType() == Material.SIGN_POST)) {
 			BlockState state = block.getState();
 			Sign sign = (Sign) state;
 

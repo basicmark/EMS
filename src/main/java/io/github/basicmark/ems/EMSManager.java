@@ -5,6 +5,7 @@ import io.github.basicmark.ems.arenaevents.EMSAutoEnd;
 import io.github.basicmark.ems.arenaevents.EMSCheckTeamPlayerCount;
 import io.github.basicmark.ems.arenaevents.EMSClearRegion;
 import io.github.basicmark.ems.arenaevents.EMSEventBlock;
+import io.github.basicmark.ems.arenaevents.EMSLightningEffect;
 import io.github.basicmark.ems.arenaevents.EMSMessenger;
 import io.github.basicmark.ems.arenaevents.EMSPotionEffect;
 import io.github.basicmark.ems.arenaevents.EMSSpawnEntity;
@@ -53,6 +54,7 @@ public class EMSManager {
 		ConfigurationSerialization.registerClass(PlayerState.class);
 		ConfigurationSerialization.registerClass(EMSAutoEnd.class);
 		ConfigurationSerialization.registerClass(EMSCheckTeamPlayerCount.class);
+		ConfigurationSerialization.registerClass(EMSLightningEffect.class);
 	}
 	EMSArenaLoader loader;
 	HashMap<Player, EMSEditState> arenaEditState;
@@ -247,7 +249,31 @@ public class EMSManager {
 		
 		return true;
 	}
+	
+	public boolean arenaSetWelcomeMessage(Player player, String message) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			return true;
+		}
 
+		editState.arena.setWelcomeMessage(message);
+		player.sendMessage(ChatColor.GREEN + "[EMS] Welcome message set");
+		
+		return true;
+	}
+	
+	public boolean arenaSetLeaveMessage(Player player, String message) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			return true;
+		}
+
+		editState.arena.setLeaveMessage(message);
+		player.sendMessage(ChatColor.GREEN + "[EMS] Leave message set");
+		
+		return true;
+	}
+	
 	public boolean arenaAddTeam(Player player, String name, String displayName) {
 		EMSEditState editState = getArenaEditState(player, true);
 		if (editState == null) {
@@ -454,24 +480,41 @@ public class EMSManager {
 		}
 		return true;
 	}
-	
-	public boolean arenaAddTimer(Player player, String eventTrigger, String createName, String inSeconds, String timeString, String displayName) {
+
+	public boolean arenaAddTimer(Player player, String eventTrigger, String createName, String timeUnit, String timerMode, String timeString, String displayName) {
 		EMSEditState editState = getArenaEditState(player, true);
 		if (editState == null) {
 			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
 			return true;
 		}
 
-		boolean tmp = Boolean.parseBoolean(inSeconds);
-		String[] splitTimes = timeString.split(",");
-		int[] timeArray = new int[splitTimes.length];
-		int i;
-		for (i=0;i<splitTimes.length;i++) {
-			timeArray[i] = Integer.parseInt(splitTimes[i]);
+		// Check the time unit is valid
+		boolean inSec;
+		if (timeUnit.equalsIgnoreCase("min")) {
+			inSec = false;
+		} else if (timeUnit.equalsIgnoreCase("sec")) {
+			inSec = true;
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Expected min or sec but got " + timeUnit);
+			return true;
 		}
 		
-		editState.arena.addTimer(eventTrigger, createName, tmp, timeArray, displayName);
-		player.sendMessage(ChatColor.GREEN + "[EMS] Added timer " + createName + " with display name " + displayName);
+		// Check the timer mode is valid
+		boolean repeat;
+		if (timerMode.equalsIgnoreCase("single")) {
+			repeat = false;
+		} else if (timerMode.equalsIgnoreCase("repeat")) {
+			repeat = true;
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Expected single or repeat but got " + timerMode);
+			return true;
+		}
+	
+		if (editState.arena.addTimer(eventTrigger, createName, inSec, repeat, timeString, displayName)) {
+			player.sendMessage(ChatColor.GREEN + "[EMS] Added timer " + createName + " with display name " + displayName);
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Failed to add timer, please check the time string (" + timeString + ") is valid for the timer mode (" + timerMode + ")");
+		}
 		return true;
 	}
 	
@@ -632,6 +675,19 @@ public class EMSManager {
 		
 		editState.arena.addCheckTeamPlayerCount(team, eventTrigger, count, createEvent);
 		player.sendMessage(ChatColor.GREEN + "[EMS] Added team/player check");
+		return true;
+	}
+	
+	public boolean arenaAddLightningEffect(Player player, String eventTrigger) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
+			return true;
+		}
+		
+		Location location = player.getLocation();
+		editState.arena.addLightningEffect(eventTrigger, location);
+		player.sendMessage(ChatColor.GREEN + "[EMS] Added lightning effect @" + location.getBlockX() + "," + location.getBlockY() + "," + location.getBlockZ() + " for " + eventTrigger);
 		return true;
 	}
 	
@@ -860,18 +916,22 @@ public class EMSManager {
 		Block block = event.getBlock();
 
 		if (event.getLine(0).toLowerCase().equals("[ems]")) {
-			// If the player isn't allowed to create an ems sign ignore the event
-			if (!player.hasPermission("ems.editarena")) {
+			// Only process the sign if the player has an edit session open
+			EMSEditState editState = getArenaEditState(player, true);
+			if (editState == null) {
+				player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
 				return;
 			}
 
 			String arenaName = event.getLine(1);
 			EMSArena arena = getArena(arenaName);
-			if (arena != null) {
+			if (arena == editState.arena) {
 				if (arena.signUpdated(block, lines)) {
 					player.sendMessage(ChatColor.GREEN + "Created join sign");
 					event.setCancelled(true);
 				}
+			} else {
+				player.sendMessage(ChatColor.RED + "[EMS] Tried to create sign for " + arena.getName() + " but arena in edit was " + editState.arena.getName());
 			}
 		}
 	}
