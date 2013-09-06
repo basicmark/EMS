@@ -785,7 +785,7 @@ public class EMSArena implements ConfigurationSerializable {
 
 		playersInLobby.add(player);
 		playersLoc.put(player, player.getLocation());
-		player.teleport(lobby);
+		teleportPlayer(player, lobby);
 		playerLoader.save(player, new PlayerState(player, saveInventory, saveXP, saveHealth));
 		player.sendMessage(ChatColor.GREEN + "[EMS] You have joined " + name);
 		if (welcomeMessage != null) {
@@ -824,7 +824,7 @@ public class EMSArena implements ConfigurationSerializable {
 		if (leaveMessage != null) {
 			player.sendMessage(ChatColor.GOLD + leaveMessage);
 		}
-		player.teleport(playersLoc.get(player));
+		teleportPlayer(player,playersLoc.get(player));
 		playersLoc.remove(player);
 		playersDeathInv.remove(player);
 		PlayerState state = playerLoader.load(player);
@@ -1016,7 +1016,7 @@ public class EMSArena implements ConfigurationSerializable {
 		// Unlike playerJoinArena the previous location of the player should not be saved 
 		playersInLobby.add(player);
 		restorePlayer(player);
-		player.teleport(lobby);
+		teleportPlayer(player, lobby);
 	}
 	
 	public void broadcast(String message) {
@@ -1088,6 +1088,11 @@ public class EMSArena implements ConfigurationSerializable {
 			players.addAll(team.getPlayers());
 		}
 		return players;
+	}
+	
+	public void teleportPlayer(Player player, Location location) {
+		player.leaveVehicle();
+		player.teleport(location);
 	}
 	
 	// Private functions

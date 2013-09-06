@@ -288,7 +288,7 @@ public class EMSTeam implements ConfigurationSerializable {
 		if ((getGetCap() == 0) || (players.size() < getGetCap())) {
 			players.add(player);
 			if (hasLobby()) {
-				player.teleport(lobby);
+				arena.teleportPlayer(player, lobby);
 			}
 
 			if (players.size() == getGetCap()) {
