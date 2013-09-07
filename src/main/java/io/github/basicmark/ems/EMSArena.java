@@ -603,15 +603,11 @@ public class EMSArena implements ConfigurationSerializable {
 		boolean consumeEvent = false;
 		String teamDisplayName = sign.getLine(2);		
 
-		if (arenaState != EMSArenaState.OPEN) {
-			player.sendMessage(ChatColor.RED + " arena is " + arenaState.toString().toLowerCase());
-			return false;
-		}
-
 		// If there is no team name then it must be an arena join sign
 		if (teamDisplayName.equals("")) {
-			playerJoinArena(player);
-			return true;
+			if (playerJoinArena(player)) {
+				consumeEvent = true;
+			}
 		} else {
 			if (playerJoinTeam(player, teamDisplayName)) {
 				consumeEvent = true;
@@ -804,9 +800,9 @@ public class EMSArena implements ConfigurationSerializable {
 	
 	// Player functions
 	@SuppressWarnings("deprecation")
-	public void playerJoinArena(Player player) {
+	public boolean playerJoinArena(Player player) {
 		if (!arenaCommandValid(player, false)) {
-			return;
+			return false;
 		}
 
 		playersInLobby.add(player);
@@ -825,6 +821,7 @@ public class EMSArena implements ConfigurationSerializable {
 		
 		// Update the arena status sign
 		updateStatusSign();
+		return true;
 	}
 
 	public boolean playerInArena(Player player) {
@@ -899,6 +896,12 @@ public class EMSArena implements ConfigurationSerializable {
 		if (!playersInLobby.contains(player)) {
 			// Only if a player is in the lobby can they join a team
 			player.sendMessage(ChatColor.RED + "You're not in the lobby!");
+			return false;
+		}
+
+		// The the event is not open then you can't join a team
+		if (arenaState != EMSArenaState.OPEN) {
+			player.sendMessage(ChatColor.RED + " arena is " + arenaState.toString().toLowerCase());
 			return false;
 		}
 		
