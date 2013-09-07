@@ -40,6 +40,7 @@ public class EMSTeam implements ConfigurationSerializable {
 	private Set<Player> players;
 	private EMSArena arena;
 	private EMSTeamState teamState;
+	private boolean teamFull;
 
 	public EMSTeam(String name, String displayName, EMSArena arena) {
 		// Init all the "static" data to their default values
@@ -56,6 +57,7 @@ public class EMSTeam implements ConfigurationSerializable {
 		this.players = new HashSet<Player>();	//new ConcurrentSkipListSet<Player>();
 		this.arena = arena;
 		this.teamState = EMSTeamState.EDITING;
+		this.teamFull = false;
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -106,6 +108,7 @@ public class EMSTeam implements ConfigurationSerializable {
 		this.arena = arena;
 		this.teamState = EMSTeamState.CLOSED;
 		this.forcedCap = 0;
+		this.teamFull = false;
 	}
 
 	@Override
@@ -293,6 +296,10 @@ public class EMSTeam implements ConfigurationSerializable {
 
 			if (players.size() == getGetCap()) {
 				teamState = EMSTeamState.FULL;
+				if (!teamFull) {
+					arena.updateTeamFullStatus(true);
+					teamFull = true;
+				}
 			}
 			updateStatusSign();
 			return true;
@@ -305,25 +312,33 @@ public class EMSTeam implements ConfigurationSerializable {
 	 * before and send them on their way
 	 */
 	
-	public void removePlayerDo(Player player) {
-		arena.sendToLobby(player);
-		if ((teamState == EMSTeamState.FULL) && (players.size() < getGetCap())) {
-			teamState = EMSTeamState.OPEN;
+	public void removePlayerDo(Player player, boolean sendToLobby) {
+		if (sendToLobby) {
+			arena.sendToLobby(player);
+		}
+		
+		if (players.size() < getGetCap()){
+			if (teamFull) {
+				arena.updateTeamFullStatus(false);
+				teamFull = false;
+			}
+
+			if (teamState == EMSTeamState.FULL) {
+				teamState = EMSTeamState.OPEN;
+			}
 		}
 	}
 	
 	public void removePlayer(Player player) {
 		players.remove(player);
-		removePlayerDo(player);
+		removePlayerDo(player, true);
 		updateStatusSign();
 	}
 	
 	public void playerDeath(Player player) {
 		// The death runner in the arena will send the player to the lobby
 		players.remove(player);
-		if ((teamState == EMSTeamState.FULL) && (players.size() < getGetCap())) {
-			teamState = EMSTeamState.OPEN;
-		}
+		removePlayerDo(player, false);
 		updateStatusSign();
 	}
 	
@@ -334,7 +349,7 @@ public class EMSTeam implements ConfigurationSerializable {
 			Player player = i.next();
 
 			i.remove();
-			removePlayerDo(player);
+			removePlayerDo(player, true);
 		}
 		updateStatusSign();
 	}

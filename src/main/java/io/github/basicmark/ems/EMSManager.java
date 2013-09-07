@@ -439,6 +439,48 @@ public class EMSManager {
 		return true;
 	}
 	
+	public boolean arenaSetAutoStart(Player player, String enableString, String minPlayerString, String countdownString) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
+			return true;
+		}	
+
+		boolean enable;
+		int minPlayer;
+		int countdown;
+		
+		try {
+			enable = Boolean.parseBoolean(enableString);
+		} catch(Exception e) {
+			player.sendMessage(ChatColor.RED + "[EMS] Expecting true/false but got " + enableString);
+			return true;
+		}
+		
+		try {
+			minPlayer = Integer.parseInt(minPlayerString);
+		} catch(Exception e) {
+			player.sendMessage(ChatColor.RED + "[EMS] Expecting a number for min player count but got " + minPlayerString);
+			return true;
+		}
+		
+		try {
+			countdown = Integer.parseInt(countdownString);
+		} catch(Exception e) {
+			player.sendMessage(ChatColor.RED + "[EMS] Expecting a number for countdown but got " + minPlayerString);
+			return true;
+		}
+		
+		countdown = Integer.parseInt(countdownString);
+		
+		if (editState.arena.arenaSetAutoStart(enable, minPlayer, countdown)) {
+			player.sendMessage(ChatColor.GREEN + "[EMS] Set auto-start config");
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Failed to set auto-start config");
+		}
+		return true;
+	}
+	
 	public boolean arenaListEvents(Player player) {
 		EMSEditState editState = getArenaEditState(player, true);
 		if (editState == null) {

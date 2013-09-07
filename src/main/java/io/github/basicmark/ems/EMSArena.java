@@ -61,7 +61,10 @@ public class EMSArena implements ConfigurationSerializable {
 	protected List<EMSArenaEvent> events;
 	protected Location joinSignLocation;
 	protected String welcomeMessage;
-	protected String leaveMessage;;
+	protected String leaveMessage;
+	protected boolean autoStartEnable;
+	protected int autoStartMinPlayer;
+	protected int autoStartCountdown;
 	
 	
 	/*
@@ -73,6 +76,8 @@ public class EMSArena implements ConfigurationSerializable {
 	private HashMap<Player, Location> playersLoc;
 	protected Set<Location> protections;
 	protected HashMap<Player, PlayerDeathInventory> playersDeathInv;
+	protected int fullTeams;
+	protected Set<Player> readyPlayers;
 	
 	PlayerStateLoader playerLoader;
 	JavaPlugin plugin;	// Required to schedule the player teleport after death
@@ -87,6 +92,8 @@ public class EMSArena implements ConfigurationSerializable {
 		this.playersLoc = new HashMap<Player, Location>();
 		this.protections = new HashSet<Location>();
 		this.playersDeathInv = new HashMap<Player, PlayerDeathInventory>();
+		this.readyPlayers = new HashSet<Player>();
+		this.fullTeams = 0;
 	}
 	
 	public EMSArena(String name) {
@@ -107,6 +114,9 @@ public class EMSArena implements ConfigurationSerializable {
 		this.joinSignLocation = null;
 		this.welcomeMessage = null;
 		this.welcomeMessage = null;
+		this.autoStartEnable = false;
+		this.autoStartMinPlayer = 0;
+		this.autoStartCountdown = 0;
 		
 		// Add tracking and auto-end by default
 		events.add(new EMSTracker(this));
@@ -153,7 +163,23 @@ public class EMSArena implements ConfigurationSerializable {
 		} catch (Exception e) {
 			this.keepInvAfterDeath = false;
 		}
-
+		try {
+			this.autoStartEnable = (boolean) values.get("autostartenable");
+		} catch (Exception e) {
+			this.autoStartEnable = false;
+		}
+		try {
+			this.autoStartMinPlayer = (int) values.get("autostartminplayer");
+		} catch (Exception e) {
+			this.autoStartMinPlayer = 0;
+		}
+		try {
+			this.autoStartCountdown = (int) values.get("autostartcountdown");
+		} catch (Exception e) {
+			this.autoStartCountdown = 0;
+		}
+		
+		
 		// Get optional config data for join sign
 		Map<String, Object> joinSignData;
 		try {
@@ -219,6 +245,9 @@ public class EMSArena implements ConfigurationSerializable {
 		values.put("keepinvafterevent", keepInvAfterEvent);
 		values.put("lobbyrespawn", lobbyRespawn);
 		values.put("keepinvafterdeath", keepInvAfterDeath);
+		values.put("autostartenable", autoStartEnable);
+		values.put("autostartminplayer", autoStartMinPlayer);
+		values.put("autostartcountdown", autoStartCountdown);
 
 		if (joinSignLocation != null) {
 			values.put("joinsign", ConfigUtils.SerializeLocation(joinSignLocation));
@@ -394,6 +423,13 @@ public class EMSArena implements ConfigurationSerializable {
 		this.keepInvAfterDeath = keep;
 		return true;
 	}
+	
+	public boolean arenaSetAutoStart(boolean enable, int minPlayer, int countdown) {
+		this.autoStartEnable = enable;
+		this.autoStartMinPlayer = minPlayer;
+		this.autoStartCountdown = countdown;
+		return true;
+	}
 
 	public boolean listEvents(Player player) {
 		Iterator<EMSArenaEvent> i = events.iterator();
@@ -522,7 +558,8 @@ public class EMSArena implements ConfigurationSerializable {
 			sign.setLine(0, arenaState.toColourString());
 			sign.setLine(1, name);
 			sign.setLine(2, "");
-			sign.setLine(3, playersInLobby.size() + " players");
+			// Players might already be in teams so use the number of player locations
+			sign.setLine(3, playersLoc.size() + " players");
 			sign.update(true);	
 		} else {
 			// The sign has gone! Remove it from the team so we don't try again.
@@ -564,7 +601,7 @@ public class EMSArena implements ConfigurationSerializable {
 
 	public boolean signClicked(Sign sign, Player player) {
 		boolean consumeEvent = false;
-		String teamName = sign.getLine(2);		
+		String teamDisplayName = sign.getLine(2);		
 
 		if (arenaState != EMSArenaState.OPEN) {
 			player.sendMessage(ChatColor.RED + " arena is " + arenaState.toString().toLowerCase());
@@ -572,28 +609,12 @@ public class EMSArena implements ConfigurationSerializable {
 		}
 
 		// If there is no team name then it must be an arena join sign
-		if (teamName.equals("")) {
+		if (teamDisplayName.equals("")) {
 			playerJoinArena(player);
 			return true;
 		} else {
-			if (!playersInLobby.contains(player)) {
-				// Only if a player is in the lobby can they join a team
-				player.sendMessage(ChatColor.RED + "You're not in the lobby!");
-				return false;
-			}
-
-			Iterator<EMSTeam> i = teams.values().iterator();
-			while (i.hasNext()) {
-				EMSTeam team = i.next();
-
-				if (team.getDisplayName().equals(teamName)) {
-					if (team.addPlayer(player)) {
-						playersInLobby.remove(player);
-					} else {
-						player.sendMessage(ChatColor.RED + " failed to add you to team " + teamName);
-					}
-					consumeEvent = true;
-				}
+			if (playerJoinTeam(player, teamDisplayName)) {
+				consumeEvent = true;
 			}
 		}
 
@@ -726,13 +747,18 @@ public class EMSArena implements ConfigurationSerializable {
 		}
 	}
 	
-	public void startEvent(CommandSender sender) {
-		Iterator<EMSTeam> i = teams.values().iterator();
-		
+	public void startEvent(CommandSender sender) {	
 		// Only start an event if the previous state of the arena was open
 		if (arenaState != EMSArenaState.OPEN) {
 			sender.sendMessage(ChatColor.RED + "[EMS] The event is already in progress");
+		} else {
+			startEvent();
 		}
+	}
+	
+	protected void startEvent()
+	{
+		Iterator<EMSTeam> i = teams.values().iterator();
 
 		while(i.hasNext()) {
 			EMSTeam team = i.next();
@@ -869,23 +895,30 @@ public class EMSArena implements ConfigurationSerializable {
 		}
 	}
 
-	public void playerJoinTeam(Player player, String teamName) {
-		if (!arenaCommandValid(player, false)) {
-			return;
+	public boolean playerJoinTeam(Player player, String teamDisplayName) {		
+		if (!playersInLobby.contains(player)) {
+			// Only if a player is in the lobby can they join a team
+			player.sendMessage(ChatColor.RED + "You're not in the lobby!");
+			return false;
 		}
 		
-		// Check the player isn't already in another team
 		Iterator<EMSTeam> i = teams.values().iterator();
-		while(i.hasNext()) {
+		while (i.hasNext()) {
 			EMSTeam team = i.next();
-			if (team.isPlayerInTeam(player)) {
-				player.sendMessage("[EMS] You're already in team " + team.getName());
-				return;
+
+			if (team.getDisplayName().equals(teamDisplayName)) {
+				if (team.addPlayer(player)) {
+					playersInLobby.remove(player);
+					if ((fullTeams == teams.size()) && autoStartEnable) {
+						startEvent();
+					}
+				} else {
+					player.sendMessage(ChatColor.RED + " failed to add you to team " + teamDisplayName);
+				}
+				return true;
 			}
 		}
-
-		EMSTeam team = teams.get(teamName);
-		team.addPlayer(player);
+		return false;
 	}
 
 	public void playerLeaveTeam(Player player) {
@@ -927,7 +960,17 @@ public class EMSArena implements ConfigurationSerializable {
 			Iterator<String> tpi =  tmpTeamMembers.iterator();
 			while (tpi.hasNext()) {
 				String player = tpi.next();
-				playerData.add("-" + player);
+				if (autoStartEnable && (autoStartMinPlayer != 0) && (arenaState.equals(EMSArenaState.OPEN))) {
+					String readyMessage = " (not ready)";
+					Player p = plugin.getServer().getPlayer(player);
+
+					if (readyPlayers.contains(p)) {
+						readyMessage = " (ready)";
+					}
+					playerData.add("-" + player + readyMessage);
+				} else {
+					playerData.add("-" + player);
+				}
 			}
 		}	
 		return playerData;
@@ -993,6 +1036,28 @@ public class EMSArena implements ConfigurationSerializable {
 						EMSTeam team = i.next();
 						if (team.isPlayerInTeam(player)) {
 							team.broadcast("[" + team.getDisplayName() + ChatColor.RESET + "] " + player.getDisplayName() + ": " + ChatColor.RESET + message);
+							
+							/*
+							 * If the arena is open then players can toggle their ready state if this arena has
+							 * auto-start enabled with a min player limit set
+							 */
+							if (arenaState.equals(EMSArenaState.OPEN) && autoStartEnable && (autoStartMinPlayer != 0)) {
+								if (stringArray[0].equalsIgnoreCase("ready")) {
+									if (!readyPlayers.contains(player)) {
+										readyPlayers.add(player);
+										broadcast(ChatColor.GRAY + player.getName() + " is ready");
+									} else {
+										readyPlayers.remove(player);
+										broadcast(ChatColor.GRAY + player.getName() + " is not ready");
+									}
+
+									if (readyPlayers.size() >= autoStartMinPlayer) {
+										startEvent();
+									} else {
+										broadcast(ChatColor.GRAY + "" + (autoStartMinPlayer - readyPlayers.size()) + " more player(s) required");
+									}
+								}
+							}
 						}
 					}
 				}
@@ -1015,6 +1080,7 @@ public class EMSArena implements ConfigurationSerializable {
 	public void sendToLobby(Player player) {
 		// Unlike playerJoinArena the previous location of the player should not be saved 
 		playersInLobby.add(player);
+		readyPlayers.remove(player);
 		restorePlayer(player);
 		teleportPlayer(player, lobby);
 	}
@@ -1093,6 +1159,14 @@ public class EMSArena implements ConfigurationSerializable {
 	public void teleportPlayer(Player player, Location location) {
 		player.leaveVehicle();
 		player.teleport(location);
+	}
+	
+	public void updateTeamFullStatus(boolean full) {
+		if (full) {
+			fullTeams++;
+		} else {
+			fullTeams--;
+		}
 	}
 	
 	// Private functions

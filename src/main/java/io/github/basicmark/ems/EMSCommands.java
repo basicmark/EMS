@@ -167,6 +167,13 @@ public class EMSCommands {
 					"<true/false> :- Set if players inventory should be kept when they die (default false)",
 					true,
 					"ems.editarena");
+		cmdProc.add("set-auto-start",
+					new EMSSetAutoStart(),
+					1,
+					3,
+					"<true/false> [min player count] [countdown] :- Set if an arena will auto start and if so the minimum player count and the countdown (default false)",
+					true,
+					"ems.editarena");
 		cmdProc.add("list-events",
 					new EMSListEvents(),
 					0,
@@ -566,6 +573,23 @@ public class EMSCommands {
     	}
     }
 	
+	public class EMSSetAutoStart implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		String enableString = args[0];
+    		String minplayerString = "0";
+    		String countdownString = "0";
+
+    		if (args.length >= 2) {
+    			minplayerString = args[1];
+    			if (args.length == 3) {
+    				countdownString = args[2];
+    			}
+    		}
+    		
+    		return manager.arenaSetAutoStart(player, enableString, minplayerString, countdownString);
+    	}
+    }
 	
 	public class EMSListEvents implements CommandRunner {
     	public boolean run(CommandSender sender, String args[]) {
