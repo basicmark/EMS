@@ -261,31 +261,31 @@ public class EMSCommands {
 					new EMSForceCapSize(),
 					2,
 					"<arena name> <cap> :- Force all teams to be capped to cap",
-					true,
+					false,
 					"ems.host");
 		cmdProc.add("start",
 					new EMSStartArena(),
 					1,
 					"<arena name> :- Start the event in the specified arena",
-					true,
+					false,
 					"ems.host");		
 		cmdProc.add("start-tracking",
 					new EMSStartArenaTracking(),
 					1,
 					"<arena name> :- Start tracking in the specified arena",
-					true,
+					false,
 					"ems.host");
 		cmdProc.add("end-tracking",
 					new EMSEndArenaTracking(),
 					1,
 					"<arena name> :- End tracking in the specified arena",
-					true,
+					false,
 					"ems.host");
 		cmdProc.add("end",
 					new EMSEndArena(),
 					1,
 					"<arena name> :- End the event in the specified arena",
-					true,
+					false,
 					"ems.host");
 		
 		// Use commands or signs?
