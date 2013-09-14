@@ -113,6 +113,7 @@ public class EMSManager {
 		player.sendMessage(ChatColor.YELLOW + "Creating new arena " + arenaName);
 		EMSArena newarena = new EMSArena(arenaName);
 		newarena.setPlugin(plugin);
+		newarena.setManager(this);
 		arenas.put(arenaName, newarena);
 
 		if (!editState.openArenaForEdit(newarena)) {
@@ -998,6 +999,7 @@ public class EMSManager {
 		while (i.hasNext()) {
 			EMSArena arena = i.next();
 			arena.setPlugin(plugin);
+			arena.setManager(this);
 			arenas.put(arena.getName(), arena);
 		}
 	}
@@ -1049,6 +1051,18 @@ public class EMSManager {
 			loadWorld(world);
 		}
 		return true;
+	}
+	
+	public boolean playerInArena(Player player) {
+		Iterator<EMSArena> i = arenas.values().iterator();
+
+		while (i.hasNext()) {
+			EMSArena arena = i.next();
+			if (arena.playerInArena(player)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// Utility functions

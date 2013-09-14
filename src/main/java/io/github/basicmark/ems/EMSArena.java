@@ -83,6 +83,7 @@ public class EMSArena implements ConfigurationSerializable {
 	protected Set<Player> readyPlayers;
 	protected DeferChunkWork deferredBlockUpdates;
 	protected TeleportQueue teleportQueue;
+	protected EMSManager manager;
 	
 	PlayerStateLoader playerLoader;
 	JavaPlugin plugin;	// Required to schedule the player teleport after death
@@ -296,6 +297,10 @@ public class EMSArena implements ConfigurationSerializable {
 		this.plugin = plugin;
 		playerLoader = new PlayerStateLoader(plugin.getDataFolder()+"/players");
 		teleportQueue = new TeleportQueue(plugin);
+	}
+	
+	public void setManager(EMSManager manager) {
+		this.manager = manager;
 	}
 
 	public String getName() {
@@ -811,6 +816,12 @@ public class EMSArena implements ConfigurationSerializable {
 	@SuppressWarnings("deprecation")
 	public boolean playerJoinArena(Player player) {
 		if (!arenaCommandValid(player, false)) {
+			return false;
+		}
+		
+		/* Before we add the player to our arena check they are not already in one */
+		if (manager.playerInArena(player)) {
+			player.sendMessage(ChatColor.RED + "[EMS] You're already in a different arena. Do /ems leave before joining a new arena");
 			return false;
 		}
 
