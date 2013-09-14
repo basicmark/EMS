@@ -2,6 +2,7 @@ package io.github.basicmark.ems;
 
 import io.github.basicmark.config.ConfigUtils;
 import io.github.basicmark.util.SpawnMethod;
+import io.github.basicmark.util.TeleportQueue;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -348,9 +349,9 @@ public class EMSTeam implements ConfigurationSerializable {
 		return players.size();
 	}
 	
-	public void spawnPlayers() {
+	public void spawnPlayers(TeleportQueue queue) {
 		if (hasSpawn()) {
-			SpawnMethod.spawnPlayers(spawnMethod, players, spawns);
+			SpawnMethod.spawnPlayers(spawnMethod, players, spawns, queue);
 		}
 	}
 	

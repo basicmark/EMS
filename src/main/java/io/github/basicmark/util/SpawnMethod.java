@@ -13,7 +13,7 @@ import org.bukkit.entity.Player;
 public enum SpawnMethod {
 	ROUNDROBIN, RANDOM, RANDOM_ONCE, INVALID;
 	
-	public static boolean spawnPlayers(SpawnMethod method, Set<Player> players, List<Location> locations) {
+	public static boolean spawnPlayers(SpawnMethod method, Set<Player> players, List<Location> locations, TeleportQueue queue) {
 		switch (method) {
 			case ROUNDROBIN:
 			{
@@ -23,7 +23,7 @@ public enum SpawnMethod {
 
 				while(it.hasNext()) {
 					Player player = it.next();
-					player.teleport(locationArray[i++]);
+					queue.addPlayer(player, locationArray[i++]);
 					if (i >= locationArray.length) {
 						i = 0;
 					}
@@ -40,7 +40,7 @@ public enum SpawnMethod {
 					//[rand.nextInt(set.size())
 					int i = rand.nextInt(locationArray.length);
 					Player player = it.next();
-					player.teleport(locationArray[i]);
+					queue.addPlayer(player, locationArray[i]);
 				}
 				break;
 			}
@@ -69,7 +69,7 @@ public enum SpawnMethod {
 					while(il.hasNext()) {
 						loc = il.next();
 						if (r == k) {
-							player.teleport(loc);
+							queue.addPlayer(player, loc);
 							break;
 						}
 						k++;

@@ -18,6 +18,7 @@ import io.github.basicmark.ems.arenaevents.EMSTimer;
 import io.github.basicmark.ems.arenaevents.EMSTracker;
 import io.github.basicmark.util.DeferChunkWork;
 import io.github.basicmark.util.PlayerDeathInventory;
+import io.github.basicmark.util.TeleportQueue;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -81,6 +82,7 @@ public class EMSArena implements ConfigurationSerializable {
 	protected int fullTeams;
 	protected Set<Player> readyPlayers;
 	protected DeferChunkWork deferredBlockUpdates;
+	protected TeleportQueue teleportQueue;
 	
 	PlayerStateLoader playerLoader;
 	JavaPlugin plugin;	// Required to schedule the player teleport after death
@@ -293,6 +295,7 @@ public class EMSArena implements ConfigurationSerializable {
 	public void setPlugin(JavaPlugin plugin) {
 		this.plugin = plugin;
 		playerLoader = new PlayerStateLoader(plugin.getDataFolder()+"/players");
+		teleportQueue = new TeleportQueue(plugin);
 	}
 
 	public String getName() {
@@ -756,8 +759,16 @@ public class EMSArena implements ConfigurationSerializable {
 
 		while(i.hasNext()) {
 			EMSTeam team = i.next();
-			team.spawnPlayers();
+			team.spawnPlayers(teleportQueue);
 		}
+
+		// TODO
+		// For now signal active although players are pending in the teleport
+		// queue as it will only take a few seconds to process unless we've
+		// 100's of players.
+		// Later we might want to have a new STARTING state and only switch to
+		// active once all players have been teleported
+		teleportQueue.startTeleport();
 
 		updateStatus(EMSArenaState.ACTIVE);
 		signalEvent("start");
@@ -1158,6 +1169,7 @@ public class EMSArena implements ConfigurationSerializable {
 	}
 	
 	public void teleportPlayer(Player player, Location location) {
+		teleportQueue.removePlayer(player);
 		player.leaveVehicle();
 		player.teleport(location);
 	}
