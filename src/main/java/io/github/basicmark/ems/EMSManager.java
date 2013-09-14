@@ -20,6 +20,7 @@ import java.util.Set;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -1014,6 +1015,16 @@ public class EMSManager {
 				arena.disable();
 				i.remove();
 			}
+		}
+	}
+	
+	public void chunkLoad(Chunk chunk) {
+		Iterator<EMSArena> i = arenas.values().iterator();
+		
+		while(i.hasNext()) {
+			EMSArena arena = i.next();
+
+			arena.chunkLoad(chunk);
 		}
 	}
 	

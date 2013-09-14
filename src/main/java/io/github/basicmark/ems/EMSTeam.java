@@ -13,10 +13,6 @@ import java.util.Set;
 
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockState;
-import org.bukkit.block.Sign;
 import org.bukkit.configuration.serialization.ConfigurationSerializable;
 import org.bukkit.entity.Player;
 
@@ -235,50 +231,24 @@ public class EMSTeam implements ConfigurationSerializable {
 		if (getJoinSign() == null) {
 			return;
 		}
-
-		Block block = getJoinSign().getBlock();
-
-		if ((block.getType() == Material.WALL_SIGN) || (block.getType() == Material.SIGN_POST)) {
-			BlockState state = block.getState();
-			Sign sign = (Sign) state;
-
-			sign.setLine(0, teamState.toColourString());
-			sign.setLine(1, arena.getName());
-
-			sign.setLine(2, getDisplayName());
-			if (getGetCap() == 0) {
-				sign.setLine(3, "[" + players.size() +"] players");
-			} else {
-				sign.setLine(3, "[" + players.size() + "/" + getGetCap() + "] players");
-			}
-			sign.update(true);	
+		
+		String lines[] = new String[4];
+		lines[0] = teamState.toColourString();
+		lines[1] = arena.getName();
+		lines[2] = getDisplayName();
+		if (getGetCap() == 0) {
+			lines[3] = "[" + players.size() +"] players";
 		} else {
-			// The sign has gone! Remove it from the team so we don't try again.
-			setJoinSign(null);
+			lines[3] = "[" + players.size() + "/" + getGetCap() + "] players";
 		}
+		arena.updateSign(getJoinSign(), lines);
 		
 		// When an arena is closed its forced cap is cleared
 		if (teamState == EMSTeamState.CLOSED) {
 			forcedCap = 0;
 		}
 	}
-	
-	public void clickOnSign(Player player, Block block) {
-		if (joinSignLocation != null) {
-			if (joinSignLocation.equals(block.getLocation())) {
-				addPlayer(player);
-			}
-		}
-	}
-	
-	public void destroySign(Block block) {
-		if (joinSignLocation != null) {
-			if (joinSignLocation.equals(block.getLocation())) {
-				setJoinSign(null);
-			}
-		}
-	}
-	
+
 	public boolean hasLobby() {
 		return !(lobby == null);
 	}

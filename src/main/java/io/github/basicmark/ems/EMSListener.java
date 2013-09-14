@@ -1,5 +1,6 @@
 package io.github.basicmark.ems;
 
+import org.bukkit.Chunk;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
@@ -13,6 +14,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
 
@@ -76,8 +78,7 @@ public class EMSListener implements Listener {
 	}
 	
 	@EventHandler
-	public void onSignChangeEvent(SignChangeEvent event) {
-		
+	public void onSignChangeEvent(SignChangeEvent event) {		
 		manager.signChanged(event);
 	}
 	
@@ -104,5 +105,11 @@ public class EMSListener implements Listener {
 		World world = event.getWorld();
 
 		manager.unloadWorld(world);
+	}
+
+	@EventHandler
+	public void onChunkLoad(final ChunkLoadEvent event) {
+		Chunk chunk = event.getChunk();
+		manager.chunkLoad(chunk);
 	}
 }

@@ -16,6 +16,7 @@ import io.github.basicmark.ems.arenaevents.EMSSpawnEntity;
 import io.github.basicmark.ems.arenaevents.EMSTeleport;
 import io.github.basicmark.ems.arenaevents.EMSTimer;
 import io.github.basicmark.ems.arenaevents.EMSTracker;
+import io.github.basicmark.util.DeferChunkWork;
 import io.github.basicmark.util.PlayerDeathInventory;
 
 import java.util.LinkedHashMap;
@@ -29,6 +30,7 @@ import java.util.Set;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
@@ -78,6 +80,7 @@ public class EMSArena implements ConfigurationSerializable {
 	protected HashMap<Player, PlayerDeathInventory> playersDeathInv;
 	protected int fullTeams;
 	protected Set<Player> readyPlayers;
+	protected DeferChunkWork deferredBlockUpdates;
 	
 	PlayerStateLoader playerLoader;
 	JavaPlugin plugin;	// Required to schedule the player teleport after death
@@ -93,6 +96,7 @@ public class EMSArena implements ConfigurationSerializable {
 		this.protections = new HashSet<Location>();
 		this.playersDeathInv = new HashMap<Player, PlayerDeathInventory>();
 		this.readyPlayers = new HashSet<Player>();
+		this.deferredBlockUpdates = new DeferChunkWork();
 		this.fullTeams = 0;
 	}
 	
@@ -548,23 +552,13 @@ public class EMSArena implements ConfigurationSerializable {
 		if (getJoinSign() == null) {
 			return;
 		}
-
-		Block block = getJoinSign().getBlock();
-
-		if ((block.getType() == Material.WALL_SIGN) || (block.getType() == Material.SIGN_POST)) {
-			BlockState state = block.getState();
-			Sign sign = (Sign) state;
-
-			sign.setLine(0, arenaState.toColourString());
-			sign.setLine(1, name);
-			sign.setLine(2, "");
-			// Players might already be in teams so use the number of player locations
-			sign.setLine(3, playersLoc.size() + " players");
-			sign.update(true);	
-		} else {
-			// The sign has gone! Remove it from the team so we don't try again.
-			setJoinSign(null);
-		}
+		
+		String lines[] = new String[4];
+		lines[0] = arenaState.toColourString();
+		lines[1] = name;
+		lines[2] = "";
+		lines[3] = playersLoc.size() + " players";
+		updateSign(getJoinSign(), lines);
 	}
 
 	
@@ -645,6 +639,10 @@ public class EMSArena implements ConfigurationSerializable {
 		}
 
 		return false;
+	}
+	
+	public void chunkLoad(Chunk chunk) {
+		 deferredBlockUpdates.chunkLoad(chunk);
 	}
 	
 	public boolean editOpen() {
@@ -1164,6 +1162,29 @@ public class EMSArena implements ConfigurationSerializable {
 		player.teleport(location);
 	}
 	
+	static public void updateSignDo(Location location, String[] lines) {
+		Block block = location.getBlock();
+
+		if ((block.getType() == Material.WALL_SIGN) || (block.getType() == Material.SIGN_POST)) {
+			BlockState state = block.getState();
+			Sign sign = (Sign) state;
+
+			sign.setLine(0, lines[0]);
+			sign.setLine(1, lines[1]);
+			sign.setLine(2, lines[2]);
+			sign.setLine(3, lines[3]);
+			sign.update(true);	
+		}
+	}
+	
+	public void updateSign(Location location, String[] lines) {
+		if (location.getWorld().isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+			updateSignDo(location, lines);
+		} else {
+ 			deferredBlockUpdates.addWork(location, new EMSSignUpdate(location, lines));
+		}
+	}
+	
 	public void updateTeamFullStatus(boolean full) {
 		if (full) {
 			fullTeams++;
@@ -1226,6 +1247,20 @@ public class EMSArena implements ConfigurationSerializable {
 			// Create the respawn event which is now missing as we reset the health to full on death
 			arena.sendToLobby(player);
 			Bukkit.getPluginManager().callEvent(new PlayerRespawnEvent(player, player.getLocation(), false));
+		}
+	}
+	
+	private class EMSSignUpdate implements Runnable {
+		Location location;
+		String[] lines;
+		
+		public EMSSignUpdate(Location location, String[] lines) {
+			this.location = location;
+			this.lines = lines;
+		}
+		
+		public void run() {
+				EMSArena.updateSignDo(location, lines);
 		}
 	}
 }
