@@ -3,8 +3,10 @@ package io.github.basicmark.ems.arenaevents;
 import io.github.basicmark.config.ConfigUtils;
 import io.github.basicmark.ems.EMSArena;
 
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -17,7 +19,7 @@ public class EMSSpawnEntity implements EMSArenaEvent{
 	EntityType entity;
 	int count;
 	
-	Entity[] spawnedEntities = null;
+	Set<Entity> spawnedEntities = null;
 
 	public EMSSpawnEntity(EMSArena arena, String triggerEvent, Location location, EntityType entity, int count) {
 		this.arena = arena;
@@ -29,6 +31,8 @@ public class EMSSpawnEntity implements EMSArenaEvent{
 		}
 		this.entity = entity;
 		this.count = count;
+		
+		this.spawnedEntities = new HashSet<Entity>();
 	}
 
 	@SuppressWarnings("unchecked")
@@ -37,6 +41,8 @@ public class EMSSpawnEntity implements EMSArenaEvent{
 		this.location = ConfigUtils.DeserializeLocation((Map<String, Object>) values.get("location"));
 		this.entity = EntityType.fromName((String) (values.get("entity")));
 		this.count = (int) values.get("count");
+		
+		this.spawnedEntities = new HashSet<Entity>();
 	}
 
 	public String getListInfo() {
@@ -46,11 +52,8 @@ public class EMSSpawnEntity implements EMSArenaEvent{
 	public void signalEvent(String trigger) {
 		// Start the timer task
 		if (trigger.equals(triggerEvent)) {
-			spawnedEntities = new Entity[count];
-			for (int i=0;i<count;i++) {
-				Entity ent = location.getWorld().spawnEntity(location, entity);
-				spawnedEntities[i] = ent;
-			}
+			Set<Entity> newEntities = arena.spawnEntities(location, entity, count);
+			spawnedEntities.addAll(newEntities);
 		}
 	}
 
@@ -64,17 +67,13 @@ public class EMSSpawnEntity implements EMSArenaEvent{
 	}
 	
 	public void cancelEvent() {
-		if (spawnedEntities != null) {
-			for (int i=0;i<count;i++) { 
-				if (spawnedEntities[i].isValid()) {
-					spawnedEntities[i].remove();
-				}
-			}
+		if (!spawnedEntities.isEmpty()) {
+			arena.removeEntities(spawnedEntities);
 		}
 	}
 	
 	public void destroy() {
-		// Nothing to do as we didn't create any resources in the constructor
+		// The gc will free our allocated resources
 	}
 	
 	public void setArena(EMSArena arena) {

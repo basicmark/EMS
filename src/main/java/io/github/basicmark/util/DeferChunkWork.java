@@ -1,63 +1,79 @@
 package io.github.basicmark.util;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
 import java.util.UUID;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.plugin.Plugin;
 
-public class DeferChunkWork {
-	HashMap<UnloadedChunk, DeferWorkList> pendingWork;
+public class DeferChunkWork<D, T extends ChunkWork<D>> {
+	Plugin plugin;
+	HashMap<UnloadedChunk, T> pendingWork;
+	Set<UnloadedChunk> forceLoaded;
 
-	public DeferChunkWork() {
-		pendingWork = new HashMap<UnloadedChunk, DeferWorkList>();
+	public DeferChunkWork(Plugin plugin) {
+		this.plugin = plugin;
+		pendingWork = new HashMap<UnloadedChunk, T>();
+		forceLoaded = new HashSet<UnloadedChunk>();
 	}
 	
-	public void addWork(Location location, Runnable task) {
+	public void addWork(Location location, D data, Runnable task, Class<T> clazz) {
 		final UnloadedChunk chunk = new UnloadedChunk(location);
-		DeferWorkList chunkWork;
+		T chunkWork;
 		
 		if (!pendingWork.containsKey(chunk)) {
-			chunkWork = new DeferWorkList();
+			try {
+				chunkWork = clazz.newInstance();
+			} catch (Exception e) {
+				Bukkit.getLogger().throwing("DeferChunkWork", "addWork", e);
+				return;
+			}
 			pendingWork.put(chunk, chunkWork);
 		} else {
 			chunkWork = pendingWork.get(chunk);
 		}
 		
-		chunkWork.add(location, task);
+		chunkWork.add(data, task);
 	}
 	
 	public void chunkLoad(Chunk chunk) {
 		final UnloadedChunk loadedChunk = new UnloadedChunk(chunk);
 
 		if (pendingWork.containsKey(loadedChunk)) {
-			DeferWorkList work = pendingWork.get(loadedChunk);
+			T work = pendingWork.get(loadedChunk);
+			boolean forced = forceLoaded.contains(loadedChunk);
 
-			work.doWork();
+			plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, new DeferChunkLoadWork<D,T>(work, chunk, forced), 10);
 			pendingWork.remove(loadedChunk);
+			if (forced) {
+				forceLoaded.remove(forceLoaded);
+			}
 		}
 	}
 	
-	private class DeferWorkList {
-		HashMap<ChunkOffset, Runnable> tasks;
+	public void forceWork() {
+		Set<UnloadedChunk> keys = new HashSet<UnloadedChunk>(pendingWork.keySet());
+		Iterator <UnloadedChunk> i = keys.iterator();
 		
-		DeferWorkList() {
-			tasks = new HashMap<ChunkOffset,Runnable>();
-		}
-		
-		void add(Location location, Runnable task) {
-			final ChunkOffset offset = new ChunkOffset(location);
-			tasks.put(offset, task);
-		}
-		
-		void doWork() {
-			Iterator<Runnable> i = tasks.values().iterator();
-
-			while (i.hasNext()) {
-				Runnable task = i.next();
-
-				task.run();
+		while (i.hasNext()) {
+			UnloadedChunk key = i.next();
+			World world = Bukkit.getWorld(key.world);
+			if (world.isChunkLoaded(key.chunkX, key.chunkZ)) {
+				// The chunk is already loaded so do the work
+				pendingWork.get(key).doWork();
+				pendingWork.remove(key);
+				
+			} else {
+				Chunk chunk;
+				chunk = world.getChunkAt(key.chunkX, key.chunkZ);
+				chunk.load(false);
+				forceLoaded.add(key);
 			}
 		}
 	}
@@ -78,7 +94,7 @@ public class DeferChunkWork {
 			this.chunkX = chunk.getX();
 			this.chunkZ = chunk.getZ();
 		}
-		
+
 		@Override
 		public int hashCode() {
 			final int prime = 31;
@@ -90,6 +106,7 @@ public class DeferChunkWork {
 			return result;
 		}
 
+		@SuppressWarnings("unchecked")
 		@Override
 		public boolean equals(Object obj) {
 			if (this == obj)
@@ -113,55 +130,28 @@ public class DeferChunkWork {
 			return true;
 		}
 
-		private DeferChunkWork getOuterType() {
+		private DeferChunkWork<D, T> getOuterType() {
 			return DeferChunkWork.this;
 		}
 	}
-	
-	private class ChunkOffset {
-		int XOffset;
-		int YOffset;
-		int ZOffset;
-		
-		ChunkOffset(Location location) {
-			this.XOffset = location.getBlockX() & 0xf;
-			this.YOffset = location.getBlockY();
-			this.ZOffset = location.getBlockZ() & 0xf;
+
+	@SuppressWarnings("hiding")
+	private class DeferChunkLoadWork<D, T extends ChunkWork<D>> implements Runnable {
+		T work;
+		boolean forced;
+		Chunk chunk;
+
+		public DeferChunkLoadWork(T work, Chunk chunk, boolean forced) {
+			this.work = work;
+			this.forced = forced;
+			this.chunk = chunk;
 		}
 
-		@Override
-		public int hashCode() {
-			final int prime = 31;
-			int result = 1;
-			result = prime * result + getOuterType().hashCode();
-			result = prime * result + XOffset;
-			result = prime * result + YOffset;
-			result = prime * result + ZOffset;
-			return result;
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			if (this == obj)
-				return true;
-			if (obj == null)
-				return false;
-			if (getClass() != obj.getClass())
-				return false;
-			ChunkOffset other = (ChunkOffset) obj;
-			if (!getOuterType().equals(other.getOuterType()))
-				return false;
-			if (XOffset != other.XOffset)
-				return false;
-			if (YOffset != other.YOffset)
-				return false;
-			if (ZOffset != other.ZOffset)
-				return false;
-			return true;
-		}
-
-		private DeferChunkWork getOuterType() {
-			return DeferChunkWork.this;
-		}
+		public void run() {
+			work.doWork();
+			if (forced) {
+				chunk.unload();
+			}
+		}		
 	}
 }

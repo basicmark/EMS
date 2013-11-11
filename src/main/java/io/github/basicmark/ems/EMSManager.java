@@ -1030,6 +1030,16 @@ public class EMSManager {
 		}
 	}
 	
+	public void chunkUnload(Chunk chunk) {
+		Iterator<EMSArena> i = arenas.values().iterator();
+		
+		while(i.hasNext()) {
+			EMSArena arena = i.next();
+
+			arena.chunkUnload(chunk);
+		}
+	}
+	
 	public boolean reloadConfigs() {
 		Iterator<EMSArena> i = arenas.values().iterator();
 

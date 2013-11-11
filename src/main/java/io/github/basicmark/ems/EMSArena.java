@@ -16,6 +16,7 @@ import io.github.basicmark.ems.arenaevents.EMSSpawnEntity;
 import io.github.basicmark.ems.arenaevents.EMSTeleport;
 import io.github.basicmark.ems.arenaevents.EMSTimer;
 import io.github.basicmark.ems.arenaevents.EMSTracker;
+import io.github.basicmark.util.ChunkWorkBlockLocation;
 import io.github.basicmark.util.DeferChunkWork;
 import io.github.basicmark.util.PlayerDeathInventory;
 import io.github.basicmark.util.TeleportQueue;
@@ -38,6 +39,7 @@ import org.bukkit.block.BlockState;
 import org.bukkit.block.Sign;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.serialization.ConfigurationSerializable;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerRespawnEvent;
@@ -68,6 +70,7 @@ public class EMSArena implements ConfigurationSerializable {
 	protected boolean autoStartEnable;
 	protected int autoStartMinPlayer;
 	protected int autoStartCountdown;
+	protected Set<Entity> arenaEntities;
 	
 	
 	/*
@@ -81,7 +84,7 @@ public class EMSArena implements ConfigurationSerializable {
 	protected HashMap<Player, PlayerDeathInventory> playersDeathInv;
 	protected int fullTeams;
 	protected Set<Player> readyPlayers;
-	protected DeferChunkWork deferredBlockUpdates;
+	protected DeferChunkWork<Location, ChunkWorkBlockLocation> deferredBlockUpdates;
 	protected TeleportQueue teleportQueue;
 	protected EMSManager manager;
 	
@@ -99,8 +102,9 @@ public class EMSArena implements ConfigurationSerializable {
 		this.protections = new HashSet<Location>();
 		this.playersDeathInv = new HashMap<Player, PlayerDeathInventory>();
 		this.readyPlayers = new HashSet<Player>();
-		this.deferredBlockUpdates = new DeferChunkWork();
+		this.arenaEntities = new HashSet<Entity>();
 		this.fullTeams = 0;
+		this.deferredBlockUpdates = null;
 	}
 	
 	public EMSArena(String name) {
@@ -234,7 +238,7 @@ public class EMSArena implements ConfigurationSerializable {
 		}
 		
 		// Update the signs to reflect the loaded state
-		updateStatus(EMSArenaState.fromString((String) values.get("state")));
+		arenaState = EMSArenaState.fromString((String) values.get("state"));
 	}
 
 	public Map<String, Object> serialize() {
@@ -297,6 +301,27 @@ public class EMSArena implements ConfigurationSerializable {
 		this.plugin = plugin;
 		playerLoader = new PlayerStateLoader(plugin.getDataFolder()+"/players");
 		teleportQueue = new TeleportQueue(plugin);
+		
+		/*
+		 * !!!Bukkit is broken!!!
+		 * It turns out that Bukkit will tell you that a chunk is loaded before
+		 * it is "fully loaded", what this means is that the block data is available
+		 * but the NBT info might not be.
+		 * This is extremely bad news as the whole point of the DeferChunkWork was
+		 * to defer update on blocks which have data attached (in the NBT).
+		 * If we try to access block state in the ChunkLoad event then there is a
+		 * chance we get a bukkit NPE crash in the constructor for the blockstate
+		 * we're trying to access. Full details can be found at:
+		 * https://bukkit.atlassian.net/browse/BUKKIT-1033
+		 * https://forums.bukkit.org/threads/block-getstate-npe-storing-blocks-in-a-list.104828/
+		 * 
+		 * So for the workaround we now have to defer the deferred work another server tick and
+		 * hope that the NBT will be loaded by then. This means that we need to provide the
+		 * plugin data to the DeferWorkChunk class which means we can't update any signs until
+		 * we get to this point where as we really wanted to do it after the arena load :/
+		 */
+		this.deferredBlockUpdates = new DeferChunkWork<Location, ChunkWorkBlockLocation>(plugin);
+		updateStatus(arenaState);
 	}
 	
 	public void setManager(EMSManager manager) {
@@ -650,7 +675,34 @@ public class EMSArena implements ConfigurationSerializable {
 	}
 	
 	public void chunkLoad(Chunk chunk) {
-		 deferredBlockUpdates.chunkLoad(chunk);
+		deferredBlockUpdates.chunkLoad(chunk);
+	}
+	
+	public void chunkUnload(Chunk chunk) {
+		if (arenaState == EMSArenaState.ACTIVE) {
+			if (chunk.getEntities() != null) {
+				Entity chunkEntities[] = chunk.getEntities();
+
+				/*
+				 * TODO:
+				 * It would be better to restrict this check to chunks which
+				 * are within the game field but up till now we haven't
+				 * needed such a concept.
+				 * 
+				 * Check if an entity which is about to be unloaded was created
+				 * by this arena, if it was then remove it from both the chunk
+				 * and our knowledge. This stops entities which where spawned
+				 * by the arena hanging around after the arena event is over
+				 * by being in unloaded chunks which then get loaded back later 
+				 */
+				for (int i=0;i<chunk.getEntities().length;i++) {
+					if (arenaEntities.contains(chunkEntities[i])) {
+						chunkEntities[i].remove();
+						arenaEntities.remove(chunkEntities[i]);
+					}
+				}
+			}
+		}
 	}
 	
 	public boolean editOpen() {
@@ -787,7 +839,7 @@ public class EMSArena implements ConfigurationSerializable {
 		while(ie.hasNext()) {
 			EMSArenaEvent event = ie.next();
 			event.cancelEvent();
-		}	
+		}
 
 		Iterator<EMSTeam> it = teams.values().iterator();
 		while(it.hasNext()) {
@@ -795,6 +847,11 @@ public class EMSArena implements ConfigurationSerializable {
 			team.removeAllPlayers();
 		}
 
+		// Remove any remaining entities which the arena knows about
+		for (Entity entity : arenaEntities) {
+			entity.remove();
+		}
+		
 		updateStatus(EMSArenaState.OPEN);
 	}
 
@@ -1131,6 +1188,33 @@ public class EMSArena implements ConfigurationSerializable {
 		}
 	}
 	
+	public Set<Entity> spawnEntities(Location location, EntityType type, int count) {
+		Set<Entity> entities = new HashSet<Entity>();
+
+		for(int i=0;i<count;i++) {
+			Entity entity = location.getWorld().spawnEntity(location, type);
+			if (entity != null) {
+				entities.add(entity);
+			}
+		}
+		arenaEntities.addAll(entities);
+		return entities;
+	}
+
+	public void removeEntities(Set<Entity> entites) {
+		Iterator<Entity> i = entites.iterator();
+
+		while (i.hasNext()) {
+			Entity entity= i.next();
+			if (arenaEntities.contains(entity)) {
+				if (entity.isValid()) {
+					entity.remove();
+				}
+				arenaEntities.remove(entity);
+			}
+		}
+	}
+	
 	public void addProtection(Location location) { 
 		protections.add(location);
 	}
@@ -1204,7 +1288,9 @@ public class EMSArena implements ConfigurationSerializable {
 		if (location.getWorld().isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
 			updateSignDo(location, lines);
 		} else {
- 			deferredBlockUpdates.addWork(location, new EMSSignUpdate(location, lines));
+			if (deferredBlockUpdates != null) {
+				deferredBlockUpdates.addWork(location, location, new EMSSignUpdate(location, lines), ChunkWorkBlockLocation.class);
+			}
 		}
 	}
 	
@@ -1256,6 +1342,19 @@ public class EMSArena implements ConfigurationSerializable {
 		return true;
 	}
 
+	void arenaRemoveAllEntities() {
+		Iterator<Entity> i = arenaEntities.iterator();
+
+		while (i.hasNext()) {
+			Entity entity= i.next();
+
+			if (entity.isValid()) {
+				entity.remove();
+			}
+			arenaEntities.remove(entity);
+		}
+	}
+	
 	public class EMSDeathRunner implements Runnable {
 		Player player;
 		EMSArena arena;
@@ -1283,7 +1382,15 @@ public class EMSArena implements ConfigurationSerializable {
 		}
 		
 		public void run() {
-				EMSArena.updateSignDo(location, lines);
+			Bukkit.getServer().getLogger().info("Chunk loaded? " + location.getChunk().isLoaded());
+			BlockState states[] = location.getChunk().getTileEntities();
+			for (int i=0;i<states.length;i++) {
+				if (states[i].getLocation().equals(location)) {
+					Bukkit.getServer().getLogger().info("Found state for block update " +states[i]);
+					//Bukkit.getServer().getLogger().info(states[i].
+				}
+			}
+			EMSArena.updateSignDo(location, lines);
 		}
 	}
 }
