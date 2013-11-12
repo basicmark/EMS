@@ -780,9 +780,22 @@ public class EMSArena implements ConfigurationSerializable {
 	}
 	
 	public void disable(boolean playerRequested) {
+		// TODO Unify arena disable and player leave logic
+		// The arena is being disabled, check if we need to save the players state to allow rejoin
+		if (allowRejoin && (!playerRequested)) {
+			Iterator<Player> pri = getAllPlayers().iterator();
+			while (pri.hasNext()) {
+				Player player = pri.next();
+				EMSPlayerRejoinData rejoin = new EMSPlayerRejoinData(player, playerGetTeam(player), true);
+
+				// Store the players state for if they rejoin
+				playerRejoinLoader.save(player.getName(), rejoin);
+			}
+		}
+		
 		// Disable all the teams
 		endEvent();
-
+		
 		// Then remove the players from the arena
 		Iterator<Player> pi = playersInLobby.iterator();
 		while(pi.hasNext()) {
@@ -1129,7 +1142,7 @@ public class EMSArena implements ConfigurationSerializable {
 		return null;
 	}
 	
-	public List<String> getPlayers() {
+	public List<String> getPlayersList() {
 		List<String> playerData = new ArrayList<String>();
 		
 		
@@ -1365,6 +1378,18 @@ public class EMSArena implements ConfigurationSerializable {
 		Set<Player> players = new HashSet<Player>();
 		Iterator<EMSTeam> i = teams.values().iterator();
 		
+		while(i.hasNext()) {
+			EMSTeam team = i.next();
+			players.addAll(team.getPlayers());
+		}
+		return players;
+	}
+
+	public Set<Player> getAllPlayers() {
+		Set<Player> players = new HashSet<Player>();
+		Iterator<EMSTeam> i = teams.values().iterator();
+		
+		players.addAll(playersInLobby);
 		while(i.hasNext()) {
 			EMSTeam team = i.next();
 			players.addAll(team.getPlayers());

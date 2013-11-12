@@ -93,6 +93,18 @@ public class EMSManager {
 
 	// We're being disabled
 	public void shutdown() {
+		Iterator<EMSArena> i = arenas.values().iterator();
+
+		/* Unload all the loaded arenas */
+		while (i.hasNext()) {
+			EMSArena arena = i.next();
+			String arenaName = arena.getWorld();
+
+			Bukkit.getLogger().info("[EMS] Unloading " + arenaName);
+			arena.disable(false);
+			arena.destroy();
+			i.remove();
+		}
 	}
 	
 	// Command hander for the plugin
@@ -779,7 +791,7 @@ public class EMSManager {
 			return true;
 		}
 		
-		List<String> players = arena.getPlayers();
+		List<String> players = arena.getPlayersList();
 		Iterator<String> i = players.iterator();
 		while (i.hasNext()) {
 			String line = i.next();
