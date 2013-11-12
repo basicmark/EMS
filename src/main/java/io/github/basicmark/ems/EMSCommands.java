@@ -174,6 +174,12 @@ public class EMSCommands {
 					"<true/false> [min player count] [countdown] :- Set if an arena will auto start and if so the minimum player count and the countdown (default false)",
 					true,
 					"ems.editarena");
+		cmdProc.add("set-allow-rejoin",
+					new EMSSetAllowRejoin(),
+					1,
+					"<true/false> :- Set if a player can rejoin after leaving (or server restart)",
+					true,
+					"ems.editarena");
 		cmdProc.add("list-events",
 					new EMSListEvents(),
 					0,
@@ -590,6 +596,15 @@ public class EMSCommands {
     		return manager.arenaSetAutoStart(player, enableString, minplayerString, countdownString);
     	}
     }
+	
+	public class EMSSetAllowRejoin implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		boolean allowRejoin = Boolean.parseBoolean(args[0]);
+    		
+    		return manager.arenaSetAllowRejoin(player, allowRejoin);
+    	}
+	}
 	
 	public class EMSListEvents implements CommandRunner {
     	public boolean run(CommandSender sender, String args[]) {

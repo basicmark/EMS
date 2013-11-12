@@ -56,6 +56,7 @@ public class EMSManager {
 		ConfigurationSerialization.registerClass(EMSAutoEnd.class);
 		ConfigurationSerialization.registerClass(EMSCheckTeamPlayerCount.class);
 		ConfigurationSerialization.registerClass(EMSLightningEffect.class);
+		ConfigurationSerialization.registerClass(EMSPlayerRejoinData.class);
 	}
 	EMSArenaLoader loader;
 	HashMap<Player, EMSEditState> arenaEditState;
@@ -189,7 +190,7 @@ public class EMSManager {
 			return true;
 		}
 		
-		arena.disable();
+		arena.disable(true);
 		sender.sendMessage(ChatColor.GREEN + "[EMS] Arena disabled");
 		loader.save(arena);
 		return true;
@@ -479,6 +480,21 @@ public class EMSManager {
 			player.sendMessage(ChatColor.GREEN + "[EMS] Set auto-start config");
 		} else {
 			player.sendMessage(ChatColor.RED + "[EMS] Failed to set auto-start config");
+		}
+		return true;
+	}
+	
+	public boolean arenaSetAllowRejoin(Player player, boolean allowRejoin) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
+			return true;
+		}	
+
+		if (editState.arena.arenaAllowRejoin(allowRejoin)) {
+			player.sendMessage(ChatColor.GREEN + "[EMS] Set allow rejoin config");
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Failed to set allow rejoin config");
 		}
 		return true;
 	}
@@ -832,26 +848,25 @@ public class EMSManager {
 
 	public void playerJoinServer(Player player) {
 		arenaEditState.put(player, new EMSEditState());
-		
-		// FIXME
-		// As per the comment below we might need auto join logic here
-	}
 
-	public void playerLeaveServer(Player player) {
-		arenaEditState.remove(player);
-		
-		// FIXME
-		// If a player is still in the arena we either need to kick them
-		// or need auto rejoin them to the arena & team they where in when
-		// they left if the event is still running
-		//
-		// For now just force them to leave as it's easier
 		Iterator<EMSArena> i = arenas.values().iterator();
 
 		while(i.hasNext()) {
 			EMSArena arena = i.next();
 
-			arena.playerLeaveArena(player);
+			arena.playerJoinServer(player);
+		}
+	}
+
+	public void playerLeaveServer(Player player) {
+		arenaEditState.remove(player);
+
+		Iterator<EMSArena> i = arenas.values().iterator();
+
+		while(i.hasNext()) {
+			EMSArena arena = i.next();
+
+			arena.playerLeaveServer(player);
 		}
 	}
 
@@ -1014,7 +1029,7 @@ public class EMSManager {
 			String arenaName = arena.getWorld();
 			if (arenaName.equals(world.getName())) {
 				Bukkit.getLogger().info("[EMS] Unloading " + arenaName);
-				arena.disable();
+				arena.disable(false);
 				i.remove();
 			}
 		}
@@ -1049,7 +1064,7 @@ public class EMSManager {
 			String arenaName = arena.getWorld();
 
 			Bukkit.getLogger().info("[EMS] Unloading " + arenaName);
-			arena.disable();
+			arena.disable(false);
 			arena.destroy();
 			i.remove();
 		}

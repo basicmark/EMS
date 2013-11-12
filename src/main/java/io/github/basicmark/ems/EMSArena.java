@@ -71,6 +71,7 @@ public class EMSArena implements ConfigurationSerializable {
 	protected int autoStartMinPlayer;
 	protected int autoStartCountdown;
 	protected Set<Entity> arenaEntities;
+	protected boolean allowRejoin;
 	
 	
 	/*
@@ -89,6 +90,7 @@ public class EMSArena implements ConfigurationSerializable {
 	protected EMSManager manager;
 	
 	PlayerStateLoader playerLoader;
+	EMSPlayerRejoinDataLoader playerRejoinLoader;
 	JavaPlugin plugin;	// Required to schedule the player teleport after death
 	
 	protected void commonInit() {
@@ -128,6 +130,7 @@ public class EMSArena implements ConfigurationSerializable {
 		this.autoStartEnable = false;
 		this.autoStartMinPlayer = 0;
 		this.autoStartCountdown = 0;
+		this.allowRejoin = false;
 		
 		// Add tracking and auto-end by default
 		events.add(new EMSTracker(this));
@@ -189,7 +192,11 @@ public class EMSArena implements ConfigurationSerializable {
 		} catch (Exception e) {
 			this.autoStartCountdown = 0;
 		}
-		
+		try {
+			this.allowRejoin = (boolean) values.get("allowrejoin");
+		} catch (Exception e) {
+			this.allowRejoin = false;
+		}	
 		
 		// Get optional config data for join sign
 		Map<String, Object> joinSignData;
@@ -259,6 +266,7 @@ public class EMSArena implements ConfigurationSerializable {
 		values.put("autostartenable", autoStartEnable);
 		values.put("autostartminplayer", autoStartMinPlayer);
 		values.put("autostartcountdown", autoStartCountdown);
+		values.put("allowrejoin", allowRejoin);
 
 		if (joinSignLocation != null) {
 			values.put("joinsign", ConfigUtils.SerializeLocation(joinSignLocation));
@@ -299,7 +307,10 @@ public class EMSArena implements ConfigurationSerializable {
 	
 	public void setPlugin(JavaPlugin plugin) {
 		this.plugin = plugin;
-		playerLoader = new PlayerStateLoader(plugin.getDataFolder()+"/players");
+		// The player state when they joined is saved in ems/save/players
+		playerLoader = new PlayerStateLoader(plugin.getDataFolder()+"/save/players");
+		// The player state when they leave an arena is saved in ems/save/arena/<arenaname>
+		playerRejoinLoader = new EMSPlayerRejoinDataLoader(plugin.getDataFolder()+ "/save/arena/" + name);
 		teleportQueue = new TeleportQueue(plugin);
 		
 		/*
@@ -322,6 +333,9 @@ public class EMSArena implements ConfigurationSerializable {
 		 */
 		this.deferredBlockUpdates = new DeferChunkWork<Location, ChunkWorkBlockLocation>(plugin);
 		updateStatus(arenaState);
+		if ((arenaState == EMSArenaState.ACTIVE) && allowRejoin) {
+			signalEvent("restart");
+		}
 	}
 	
 	public void setManager(EMSManager manager) {
@@ -467,7 +481,12 @@ public class EMSArena implements ConfigurationSerializable {
 		this.autoStartCountdown = countdown;
 		return true;
 	}
-
+	
+	public boolean arenaAllowRejoin(boolean allowRejoin) {
+		this.allowRejoin = allowRejoin;
+		return true;
+	}
+	
 	public boolean listEvents(Player player) {
 		Iterator<EMSArenaEvent> i = events.iterator();
 		int j = 0;
@@ -710,7 +729,7 @@ public class EMSArena implements ConfigurationSerializable {
 			// The arena is already in edit state
 			return false;
 		} else if (arenaState != EMSArenaState.CLOSED) {
-			disable();
+			disable(true);
 		}
 		
 		updateStatus(EMSArenaState.EDITING);
@@ -760,7 +779,7 @@ public class EMSArena implements ConfigurationSerializable {
 		return true;
 	}
 	
-	public void disable() {
+	public void disable(boolean playerRequested) {
 		// Disable all the teams
 		endEvent();
 
@@ -773,7 +792,15 @@ public class EMSArena implements ConfigurationSerializable {
 			playerLeaveArenaDo(player);
 			pi.remove();
 		}
-		updateStatus(EMSArenaState.CLOSED);
+		
+		if (allowRejoin) {
+			if (playerRequested) {
+				playerRejoinLoader.deleteAll();
+				updateStatus(EMSArenaState.CLOSED);
+			}
+		} else {
+			updateStatus(EMSArenaState.CLOSED);
+		}
 	}
 
 	public void destroy() {
@@ -871,6 +898,61 @@ public class EMSArena implements ConfigurationSerializable {
 	
 	// Player functions
 	@SuppressWarnings("deprecation")
+	public void playerJoinArenaCommon(Player player, boolean playerRequested) {
+		EMSPlayerRejoinData rejoinData = null;
+	
+		// Only try to load the rejoin data if rejoining is allowed
+		if (allowRejoin) {
+			rejoinData = playerRejoinLoader.load(player.getName());
+		}
+
+		if ((!playerRequested) && (rejoinData == null)) {
+			// The player didn't request this join and we haven't seen this player before so let them be
+			return;
+		}
+	
+		if (rejoinData != null) {
+			if ((playerRequested) || ((!playerRequested ) && rejoinData.getAutoRejoin())) {
+				// The player has been here before, should we make them rejoin the arena?
+				playersInLobby.add(player);
+				playersLoc.put(player, player.getLocation());
+				playerLoader.save(player, new PlayerState(player, saveInventory, saveXP, saveHealth));
+				
+				rejoinData.restore(player);
+				if (rejoinData.getTeam() != null) {
+					playerJoinTeam(player, rejoinData.getTeam());
+				}
+				teleportPlayer(player,rejoinData.getLocation());
+				player.sendMessage(ChatColor.GREEN + "[EMS] You have rejoined " + name);
+				if (welcomeMessage != null) {
+					player.sendMessage(ChatColor.GOLD + welcomeMessage);
+				}
+			} else {
+				// The player left of their own accord and didn't request this rejoin so let them be
+				return;
+			}
+		} else {
+			// New player, take them into the lobby
+			playersInLobby.add(player);
+			playersLoc.put(player, player.getLocation());
+			playerLoader.save(player, new PlayerState(player, saveInventory, saveXP, saveHealth));
+
+			teleportPlayer(player, lobby);
+			player.sendMessage(ChatColor.GREEN + "[EMS] You have joined " + name);
+			if (welcomeMessage != null) {
+				player.sendMessage(ChatColor.GOLD + welcomeMessage);
+			}
+		}
+		
+		// Force an inventory update as if the play joins via a sign although their inventory
+		// gets cleared the player will still see it a ghost form, the only way to do this is
+		// to use a deprecated function :(
+		player.updateInventory();
+		
+		// Update the arena status sign
+		updateStatusSign();
+	}
+
 	public boolean playerJoinArena(Player player) {
 		if (!arenaCommandValid(player, false)) {
 			return false;
@@ -882,22 +964,8 @@ public class EMSArena implements ConfigurationSerializable {
 			return false;
 		}
 
-		playersInLobby.add(player);
-		playersLoc.put(player, player.getLocation());
-		teleportPlayer(player, lobby);
-		playerLoader.save(player, new PlayerState(player, saveInventory, saveXP, saveHealth));
-		player.sendMessage(ChatColor.GREEN + "[EMS] You have joined " + name);
-		if (welcomeMessage != null) {
-			player.sendMessage(ChatColor.GOLD + welcomeMessage);
-		}
-		
-		// Force an inventory update as if the play joins via a sign although their inventory
-		// gets cleared the player will still see it a ghost form, the only way to do this is
-		// to use a deprecated function :(
-		player.updateInventory();
-		
-		// Update the arena status sign
-		updateStatusSign();
+		playerJoinArenaCommon(player, true);
+
 		return true;
 	}
 
@@ -927,6 +995,7 @@ public class EMSArena implements ConfigurationSerializable {
 		teleportPlayer(player,playersLoc.get(player));
 		playersLoc.remove(player);
 		playersDeathInv.remove(player);
+
 		PlayerState state = playerLoader.load(player);
 		if (state != null) {
 			state.restore(player);
@@ -937,15 +1006,35 @@ public class EMSArena implements ConfigurationSerializable {
 		updateStatusSign();
 	}
 	
-	/*
-	 * Player is leaving the arena remove them from the lobby/team
-	 * and set their state right
-	 */
-	public void playerLeaveArena(Player player) {
-		if (!arenaCommandValid(player, true)) {
-			return;
-		}
+	public void playerJoinServer(Player player) {
+		// The common function will do the right thing
+		playerJoinArenaCommon(player, false);
+	}
 	
+	public void playerLeaveServer(Player player) {
+		// If the player is in the arena force them to leave
+		if (playerInArena(player)) {
+			playerLeaveArenaCommon(player, false);
+		}
+	}
+
+	public void playerLeaveArenaCommon(Player player, boolean playerRequested) {
+		/*
+		 * Some arenas allow players to rejoin them. In this case we still go
+		 * through the normal process of restoring their state when they leave
+		 * as it simplifies things in the case where the player is not online when
+		 * the arena is closed.
+		 * However, what we do is save the players current state within the arena
+		 * so when they rejoin we can restore them to the state they where in
+		 * when they left.
+		 */
+		if (allowRejoin) {
+			EMSPlayerRejoinData rejoin = new EMSPlayerRejoinData(player, playerGetTeam(player), !playerRequested);
+
+			// Store the players state for if they rejoin
+			playerRejoinLoader.save(player.getName(), rejoin);
+		}
+		
 		/*
 		 *  Remove the player from the team they are in (if any) which will
 		 *  kick them back into the lobby
@@ -953,7 +1042,7 @@ public class EMSArena implements ConfigurationSerializable {
 		playerLeaveTeam(player);
 		
 		/*
-		 * Then check if they are in the lobby and remove them from their
+		 * Then check if they are in the lobby and remove them from there
 		 */
 		if (playersInLobby.contains(player)) {
 			playersInLobby.remove(player);
@@ -967,6 +1056,14 @@ public class EMSArena implements ConfigurationSerializable {
 		if (arenaState == EMSArenaState.ACTIVE) {
 			signalEvent("player-leave");
 		}
+	}
+
+	public void playerLeaveArena(Player player) {
+		if (!arenaCommandValid(player, true)) {
+			return;
+		}
+
+		playerLeaveArenaCommon(player, true);
 	}
 
 	public boolean playerJoinTeam(Player player, String teamDisplayName) {		
@@ -1018,6 +1115,18 @@ public class EMSArena implements ConfigurationSerializable {
 		}
 
 		return;
+	}
+	
+	public String playerGetTeam(Player player) {
+		// Check all teams for the player and remove them if found
+		Iterator<EMSTeam> i = teams.values().iterator();
+		while(i.hasNext()) {
+			EMSTeam team = i.next();
+			if (team.isPlayerInTeam(player)) {
+				return team.getDisplayName();
+			}
+		}
+		return null;
 	}
 	
 	public List<String> getPlayers() {
