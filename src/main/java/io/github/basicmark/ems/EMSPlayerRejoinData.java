@@ -12,12 +12,14 @@ public class EMSPlayerRejoinData extends PlayerState {
 	Location location;
 	String teamName;
 	boolean autoRejoin;
+	int activeTime;
 
-	public EMSPlayerRejoinData(Player player, String team, boolean rejoin) {
+	public EMSPlayerRejoinData(Player player, String team, boolean rejoin, int time) {
 		super(player, true, true, true);
 		location = player.getLocation();
 		teamName = team;
 		autoRejoin = rejoin;
+		activeTime = time;
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -26,6 +28,7 @@ public class EMSPlayerRejoinData extends PlayerState {
 		location = ConfigUtils.DeserializeLocation((Map<String, Object>) values.get("location"));
 		teamName = (String) values.get("teamname");
 		autoRejoin = (boolean) values.get("autorejoin");
+		activeTime = (int) values.get("activetime");
 	}
 	
 	public Map<String, Object> serialize() {
@@ -33,6 +36,7 @@ public class EMSPlayerRejoinData extends PlayerState {
 		values.put("location", ConfigUtils.SerializeLocation(location));
 		values.put("teamname", teamName);
 		values.put("autorejoin", autoRejoin);
+		values.put("activetime", activeTime);
 		return values;
 	}
 	
@@ -46,6 +50,10 @@ public class EMSPlayerRejoinData extends PlayerState {
 	
 	public boolean getAutoRejoin() {
 		return autoRejoin;
+	}
+	
+	public int getActiveTime() {
+		return activeTime;
 	}
 }
 

@@ -21,6 +21,7 @@ import io.github.basicmark.util.DeferChunkWork;
 import io.github.basicmark.util.PlayerDeathInventory;
 import io.github.basicmark.util.TeleportQueue;
 
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ArrayList;
@@ -86,6 +87,7 @@ public class EMSArena implements ConfigurationSerializable {
 	protected int fullTeams;
 	protected Set<Player> readyPlayers;
 	protected DeferChunkWork<Location, ChunkWorkBlockLocation> deferredBlockUpdates;
+	protected HashMap<Player, EMSPlayerTimeData> playerTimes;
 	protected TeleportQueue teleportQueue;
 	protected EMSManager manager;
 	
@@ -105,6 +107,7 @@ public class EMSArena implements ConfigurationSerializable {
 		this.playersDeathInv = new HashMap<Player, PlayerDeathInventory>();
 		this.readyPlayers = new HashSet<Player>();
 		this.arenaEntities = new HashSet<Entity>();
+		this.playerTimes = new HashMap<Player, EMSPlayerTimeData>();
 		this.fullTeams = 0;
 		this.deferredBlockUpdates = null;
 	}
@@ -786,7 +789,9 @@ public class EMSArena implements ConfigurationSerializable {
 			Iterator<Player> pri = getAllPlayers().iterator();
 			while (pri.hasNext()) {
 				Player player = pri.next();
-				EMSPlayerRejoinData rejoin = new EMSPlayerRejoinData(player, playerGetTeam(player), true);
+				EMSPlayerTimeData time = playerTimes.get(player);
+				time.update();
+				EMSPlayerRejoinData rejoin = new EMSPlayerRejoinData(player, playerGetTeam(player), true, time.getActiveTime());
 
 				// Store the players state for if they rejoin
 				playerRejoinLoader.save(player.getName(), rejoin);
@@ -931,6 +936,7 @@ public class EMSArena implements ConfigurationSerializable {
 				playersLoc.put(player, player.getLocation());
 				playerLoader.save(player, new PlayerState(player, saveInventory, saveXP, saveHealth));
 				
+				playerTimes.put(player, new EMSPlayerTimeData(rejoinData.getActiveTime()));
 				rejoinData.restore(player);
 				if (rejoinData.getTeam() != null) {
 					playerJoinTeam(player, rejoinData.getTeam());
@@ -950,6 +956,8 @@ public class EMSArena implements ConfigurationSerializable {
 			playersLoc.put(player, player.getLocation());
 			playerLoader.save(player, new PlayerState(player, saveInventory, saveXP, saveHealth));
 
+			playerTimes.put(player, new EMSPlayerTimeData());
+			
 			teleportPlayer(player, lobby);
 			player.sendMessage(ChatColor.GREEN + "[EMS] You have joined " + name);
 			if (welcomeMessage != null) {
@@ -1042,7 +1050,9 @@ public class EMSArena implements ConfigurationSerializable {
 		 * when they left.
 		 */
 		if (allowRejoin) {
-			EMSPlayerRejoinData rejoin = new EMSPlayerRejoinData(player, playerGetTeam(player), !playerRequested);
+			EMSPlayerTimeData time = playerTimes.get(player);
+			time.update();
+			EMSPlayerRejoinData rejoin = new EMSPlayerRejoinData(player, playerGetTeam(player), !playerRequested, time.getActiveTime());
 
 			// Store the players state for if they rejoin
 			playerRejoinLoader.save(player.getName(), rejoin);
@@ -1525,6 +1535,30 @@ public class EMSArena implements ConfigurationSerializable {
 				}
 			}
 			EMSArena.updateSignDo(location, lines);
+		}
+	}
+	
+	private class EMSPlayerTimeData {
+		Date sampleTime;
+		int activeTime;
+
+		EMSPlayerTimeData(int playedTime) {
+			activeTime = playedTime;
+			sampleTime = new Date();
+		}
+		
+		EMSPlayerTimeData() {
+			activeTime = 0;
+			sampleTime = new Date();
+		}
+		
+		void update() {
+			Date now = new Date();
+			activeTime += (now.getTime() - sampleTime.getTime()) / 1000;
+		}
+		
+		int getActiveTime() {
+			return activeTime;
 		}
 	}
 }
