@@ -511,6 +511,31 @@ public class EMSManager {
 		return true;
 	}
 	
+	public boolean arenaSetTimeLimit(Player player, boolean limit, int time, int perPeroid) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
+			return true;
+		}	
+
+		if (limit && (time == 0)) {
+			player.sendMessage(ChatColor.RED + "[EMS] Expecting a limit time");
+			return true;
+		}
+		if ((!limit) && (time != 0)) {
+			player.sendMessage(ChatColor.RED + "[EMS] Not expecting a limit time but got one");
+			return true;
+		}
+		
+		if (editState.arena.arenaTimeLimit(time, perPeroid)) {
+			player.sendMessage(ChatColor.GREEN + "[EMS] Set allow rejoin config");
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Failed to set allow rejoin config");
+		}
+		return true;
+	}
+	
+	
 	public boolean arenaListEvents(Player player) {
 		EMSEditState editState = getArenaEditState(player, true);
 		if (editState == null) {
@@ -819,6 +844,7 @@ public class EMSManager {
 		
 		arena.startEvent(sender);
 		sender.sendMessage(ChatColor.GREEN + "[EMS] Arena " + arenaName + " started");
+		loader.save(arena);
 		return true;
 	}
 
@@ -830,6 +856,7 @@ public class EMSManager {
 		
 		arena.endEvent();
 		sender.sendMessage(ChatColor.GREEN + "[EMS] Arena " + arenaName + " ended");
+		loader.save(arena);
 		return true;
 	}
 

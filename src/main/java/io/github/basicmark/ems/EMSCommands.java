@@ -180,6 +180,13 @@ public class EMSCommands {
 					"<true/false> :- Set if a player can rejoin after leaving (or server restart)",
 					true,
 					"ems.editarena");
+		cmdProc.add("set-time-limit",
+					new EMSSetTimeLimit(),
+					1,
+					3,
+					"<true/false> [time limit in min] [per day] :- Set if there is a time limit before a player will be kicked",
+					true,
+					"ems.editarena");
 		cmdProc.add("list-events",
 					new EMSListEvents(),
 					0,
@@ -603,6 +610,25 @@ public class EMSCommands {
     		boolean allowRejoin = Boolean.parseBoolean(args[0]);
     		
     		return manager.arenaSetAllowRejoin(player, allowRejoin);
+    	}
+	}
+	
+	public class EMSSetTimeLimit implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		boolean limit = Boolean.parseBoolean(args[0]);
+    		int time = 0;
+    		int perPeroid = 0;
+    		
+    		if (args.length >= 2) {
+    			time = Integer.parseInt(args[1]);
+    		}
+    		
+    		if (args.length == 3) {
+    			perPeroid = Integer.parseInt(args[2]);
+    		}
+    		
+    		return manager.arenaSetTimeLimit(player, limit, time, perPeroid);
     	}
 	}
 	

@@ -73,6 +73,10 @@ public class EMSArena implements ConfigurationSerializable {
 	protected int autoStartCountdown;
 	protected Set<Entity> arenaEntities;
 	protected boolean allowRejoin;
+	protected int timeLimit;
+	protected int perPeriodLimit;
+	protected Date startTime;
+	protected int timerUpdate;
 	
 	
 	/*
@@ -110,6 +114,9 @@ public class EMSArena implements ConfigurationSerializable {
 		this.playerTimes = new HashMap<Player, EMSPlayerTimeData>();
 		this.fullTeams = 0;
 		this.deferredBlockUpdates = null;
+		this.timeLimit = 0;
+		this.perPeriodLimit = 0;
+		this.timerUpdate = -1;
 	}
 	
 	public EMSArena(String name) {
@@ -200,6 +207,23 @@ public class EMSArena implements ConfigurationSerializable {
 		} catch (Exception e) {
 			this.allowRejoin = false;
 		}	
+
+		try {
+			this.timeLimit = (int) values.get("timelimit");
+		} catch (Exception e) {
+			this.timeLimit = 0;
+		}
+		try {
+			this.perPeriodLimit = (int) values.get("perperiodlimit");
+		} catch (Exception e) {
+			this.perPeriodLimit = 0;
+		}
+
+		try {
+			this.startTime = (Date) values.get("starttime");
+		} catch (Exception e) {
+			this.startTime = null;
+		}
 		
 		// Get optional config data for join sign
 		Map<String, Object> joinSignData;
@@ -270,6 +294,9 @@ public class EMSArena implements ConfigurationSerializable {
 		values.put("autostartminplayer", autoStartMinPlayer);
 		values.put("autostartcountdown", autoStartCountdown);
 		values.put("allowrejoin", allowRejoin);
+		values.put("timelimit", timeLimit);
+		values.put("perperiodlimit", perPeriodLimit);
+		values.put("starttime", startTime);
 
 		if (joinSignLocation != null) {
 			values.put("joinsign", ConfigUtils.SerializeLocation(joinSignLocation));
@@ -338,6 +365,12 @@ public class EMSArena implements ConfigurationSerializable {
 		updateStatus(arenaState);
 		if ((arenaState == EMSArenaState.ACTIVE) && allowRejoin) {
 			signalEvent("restart");
+			if ((timerUpdate == -1) && (timeLimit != 0)) {
+				timerUpdate = plugin.getServer().getScheduler().scheduleSyncRepeatingTask(plugin, new EMSTimeChecker(this), 20 * 60, 20 * 60);
+				if (timerUpdate == -1) {
+					plugin.getServer().getLogger().info("[EMS] Failed to start timer task");
+				}
+			}
 		}
 	}
 	
@@ -487,6 +520,12 @@ public class EMSArena implements ConfigurationSerializable {
 	
 	public boolean arenaAllowRejoin(boolean allowRejoin) {
 		this.allowRejoin = allowRejoin;
+		return true;
+	}
+	
+	public boolean arenaTimeLimit(int time, int perPeroid) {
+		this.timeLimit = time;
+		this.perPeriodLimit = perPeroid;
 		return true;
 	}
 	
@@ -874,6 +913,15 @@ public class EMSArena implements ConfigurationSerializable {
 
 		updateStatus(EMSArenaState.ACTIVE);
 		signalEvent("start");
+		
+		startTime = new Date();
+
+		if ((timerUpdate == -1) && (timeLimit != 0)) {
+			timerUpdate = plugin.getServer().getScheduler().scheduleSyncRepeatingTask(plugin, new EMSTimeChecker(this), 20 * 60, 20 * 60);
+			if (timerUpdate == -1) {
+				plugin.getServer().getLogger().info("[EMS] Failed to start timer task");
+			}
+		}
 	}
 	
 	public void endEvent() {
@@ -898,6 +946,10 @@ public class EMSArena implements ConfigurationSerializable {
 		}
 		
 		updateStatus(EMSArenaState.OPEN);
+		if (timerUpdate != -1) {
+			plugin.getServer().getScheduler().cancelTask(timerUpdate);
+			timerUpdate = -1;
+		}
 	}
 
 	public boolean startTracking() {
@@ -931,12 +983,17 @@ public class EMSArena implements ConfigurationSerializable {
 	
 		if (rejoinData != null) {
 			if ((playerRequested) || ((!playerRequested ) && rejoinData.getAutoRejoin())) {
+				if (rejoinData.getActiveTime() >= getAllowedTime()) {
+					player.sendMessage(ChatColor.GOLD + "[EMS] You've reached your time-limit and are not allowed to rejoin the arena!");
+					return;
+				}
+				
 				// The player has been here before, should we make them rejoin the arena?
 				playersInLobby.add(player);
 				playersLoc.put(player, player.getLocation());
 				playerLoader.save(player, new PlayerState(player, saveInventory, saveXP, saveHealth));
 				
-				playerTimes.put(player, new EMSPlayerTimeData(rejoinData.getActiveTime()));
+				playerTimes.put(player, new EMSPlayerTimeData(player, rejoinData.getActiveTime()));
 				rejoinData.restore(player);
 				if (rejoinData.getTeam() != null) {
 					playerJoinTeam(player, rejoinData.getTeam());
@@ -956,7 +1013,7 @@ public class EMSArena implements ConfigurationSerializable {
 			playersLoc.put(player, player.getLocation());
 			playerLoader.save(player, new PlayerState(player, saveInventory, saveXP, saveHealth));
 
-			playerTimes.put(player, new EMSPlayerTimeData());
+			playerTimes.put(player, new EMSPlayerTimeData(player));
 			
 			teleportPlayer(player, lobby);
 			player.sendMessage(ChatColor.GREEN + "[EMS] You have joined " + name);
@@ -1016,6 +1073,7 @@ public class EMSArena implements ConfigurationSerializable {
 		teleportPlayer(player,playersLoc.get(player));
 		playersLoc.remove(player);
 		playersDeathInv.remove(player);
+		playerTimes.remove(player);
 
 		PlayerState state = playerLoader.load(player);
 		if (state != null) {
@@ -1407,6 +1465,28 @@ public class EMSArena implements ConfigurationSerializable {
 		return players;
 	}
 	
+	public Iterator<EMSPlayerTimeData> getTimeDataIterator() {
+		return playerTimes.values().iterator();
+	}
+	
+	public int getAllowedTime() {
+		Date now = new Date();
+		
+		if (perPeriodLimit == 0) {
+			return timeLimit;
+		} else {
+			/*
+			 * Workout how long the arena has been active, then the number of time periods
+			 * this is before then multiplying that (+1 so we don't have to wait a time period
+			 * before we can join) by the time limit per period.
+			 */
+			int total = (int) ((now.getTime() / (60 * 1000)) - (startTime.getTime() / (60 * 1000)));
+			total /= perPeriodLimit;
+			total = (total + 1) * timeLimit;
+			return total;
+		}
+	}
+	
 	public void teleportPlayer(Player player, Location location) {
 		teleportQueue.removePlayer(player);
 		player.leaveVehicle();
@@ -1539,26 +1619,58 @@ public class EMSArena implements ConfigurationSerializable {
 	}
 	
 	private class EMSPlayerTimeData {
+		Player player;
 		Date sampleTime;
 		int activeTime;
 
-		EMSPlayerTimeData(int playedTime) {
+		EMSPlayerTimeData(Player player, int playedTime) {
+			this.player = player;
 			activeTime = playedTime;
 			sampleTime = new Date();
 		}
 		
-		EMSPlayerTimeData() {
+		EMSPlayerTimeData(Player player) {
+			this.player = player;
 			activeTime = 0;
 			sampleTime = new Date();
 		}
 		
 		void update() {
 			Date now = new Date();
-			activeTime += (now.getTime() - sampleTime.getTime()) / 1000;
+			activeTime += (now.getTime() - sampleTime.getTime()) / (1000 * 60);
+			sampleTime = now;
 		}
 		
 		int getActiveTime() {
 			return activeTime;
+		}
+		
+		Player getPlayer() {
+			return player;
+		}
+	}
+	
+	private class EMSTimeChecker implements Runnable {
+		EMSArena arena;
+		EMSTimeChecker(EMSArena arena) {
+			this.arena = arena;
+		}
+		
+		public void run() {
+			Iterator<EMSPlayerTimeData> i = arena.getTimeDataIterator();
+			
+			while(i.hasNext()) {
+				EMSPlayerTimeData timeData = i.next();
+
+				timeData.update();
+				Bukkit.getServer().getLogger().info("Processed update for player " +timeData.getPlayer().getName() + ": Allowed = " + arena.getAllowedTime() + ", active = " + timeData.getActiveTime());
+				if (timeData.getActiveTime() >= arena.getAllowedTime()) {
+					Player player = timeData.getPlayer();
+					player.sendMessage(ChatColor.GOLD + "[EMS] You've reached your time-limit and have been kicked from the arena!");
+					arena.playerLeaveArena(player);
+				}
+			}
+			Bukkit.getServer().getLogger().info("Processed timer for arena " + arena.getName());
 		}
 	}
 }
