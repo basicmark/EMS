@@ -9,6 +9,7 @@ import io.github.basicmark.ems.arenaevents.EMSAutoEnd;
 import io.github.basicmark.ems.arenaevents.EMSCheckTeamPlayerCount;
 import io.github.basicmark.ems.arenaevents.EMSClearRegion;
 import io.github.basicmark.ems.arenaevents.EMSEventBlock;
+import io.github.basicmark.ems.arenaevents.EMSFillRegion;
 import io.github.basicmark.ems.arenaevents.EMSLightningEffect;
 import io.github.basicmark.ems.arenaevents.EMSMessenger;
 import io.github.basicmark.ems.arenaevents.EMSPotionEffect;
@@ -77,6 +78,8 @@ public class EMSArena implements ConfigurationSerializable {
 	protected int perPeriodLimit;
 	protected Date startTime;
 	protected int timerUpdate;
+	protected boolean disableTeamChat;
+	protected HashMap<String, ArrayList<Player>> joinQueues;
 	
 	
 	/*
@@ -112,11 +115,13 @@ public class EMSArena implements ConfigurationSerializable {
 		this.readyPlayers = new HashSet<Player>();
 		this.arenaEntities = new HashSet<Entity>();
 		this.playerTimes = new HashMap<Player, EMSPlayerTimeData>();
+		this.joinQueues = new HashMap<String, ArrayList<Player>>();
 		this.fullTeams = 0;
 		this.deferredBlockUpdates = null;
 		this.timeLimit = 0;
 		this.perPeriodLimit = 0;
 		this.timerUpdate = -1;
+		this.disableTeamChat = false;
 	}
 	
 	public EMSArena(String name) {
@@ -224,6 +229,12 @@ public class EMSArena implements ConfigurationSerializable {
 		} catch (Exception e) {
 			this.startTime = null;
 		}
+
+		try {
+			this.disableTeamChat = (boolean) values.get("disableteamchat");
+		} catch (Exception e) {
+			this.disableTeamChat = false;
+		}
 		
 		// Get optional config data for join sign
 		Map<String, Object> joinSignData;
@@ -297,6 +308,7 @@ public class EMSArena implements ConfigurationSerializable {
 		values.put("timelimit", timeLimit);
 		values.put("perperiodlimit", perPeriodLimit);
 		values.put("starttime", startTime);
+		values.put("disableteamchat", disableTeamChat);
 
 		if (joinSignLocation != null) {
 			values.put("joinsign", ConfigUtils.SerializeLocation(joinSignLocation));
@@ -529,6 +541,11 @@ public class EMSArena implements ConfigurationSerializable {
 		return true;
 	}
 	
+	public boolean arenaDisableTeamChat(boolean disable) {
+		this.disableTeamChat = disable;
+		return true;
+	}
+	
 	public boolean listEvents(Player player) {
 		Iterator<EMSArenaEvent> i = events.iterator();
 		int j = 0;
@@ -584,6 +601,12 @@ public class EMSArena implements ConfigurationSerializable {
 	public boolean addClearRegion(String triggerName, Location pos1, Location pos2) {
 		EMSClearRegion eventClearRegion = new EMSClearRegion(this, triggerName, pos1, pos2);
 		events.add(eventClearRegion);
+		return true;
+	}
+	
+	public boolean addFillRegion(String triggerName, Location pos1, Location pos2, String blockType) {
+		EMSFillRegion eventFillRegion = new EMSFillRegion(this, triggerName, pos1, pos2, blockType);
+		events.add(eventFillRegion);
 		return true;
 	}
 	
@@ -950,6 +973,9 @@ public class EMSArena implements ConfigurationSerializable {
 			plugin.getServer().getScheduler().cancelTask(timerUpdate);
 			timerUpdate = -1;
 		}
+		
+		// The event has ended so process the join queue
+		processJoinQueue();
 	}
 
 	public boolean startTracking() {
@@ -996,7 +1022,7 @@ public class EMSArena implements ConfigurationSerializable {
 				playerTimes.put(player, new EMSPlayerTimeData(player, rejoinData.getActiveTime()));
 				rejoinData.restore(player);
 				if (rejoinData.getTeam() != null) {
-					playerJoinTeam(player, rejoinData.getTeam());
+					playerJoinTeamCommon(player, rejoinData.getTeam());
 				}
 				teleportPlayer(player,rejoinData.getLocation());
 				player.sendMessage(ChatColor.GREEN + "[EMS] You have rejoined " + name);
@@ -1086,6 +1112,10 @@ public class EMSArena implements ConfigurationSerializable {
 	}
 	
 	public void playerJoinServer(Player player) {
+		if (!arenaCommandValid(player, false)) {
+			return;
+		}
+
 		// The common function will do the right thing
 		playerJoinArenaCommon(player, false);
 	}
@@ -1121,6 +1151,18 @@ public class EMSArena implements ConfigurationSerializable {
 		 *  kick them back into the lobby
 		 */
 		playerLeaveTeam(player);
+
+		/*
+		 *  Check if a player is queueing
+		 */
+		Iterator<ArrayList<Player>> i = joinQueues.values().iterator();
+		while(i.hasNext()) {
+			ArrayList<Player> tmp = i.next();
+			if (tmp.contains(player)) {
+				tmp.remove(player);
+				player.sendMessage(ChatColor.GREEN + "[EMS] Removed you from your current queue as you're leaving");
+			}
+		}
 		
 		/*
 		 * Then check if they are in the lobby and remove them from there
@@ -1136,6 +1178,9 @@ public class EMSArena implements ConfigurationSerializable {
 		 */
 		if (arenaState == EMSArenaState.ACTIVE) {
 			signalEvent("player-leave");
+		} else if (arenaState == EMSArenaState.OPEN) {
+			// The arena is open and a player left so check if we can let someone else in
+			processJoinQueue();
 		}
 	}
 
@@ -1146,8 +1191,8 @@ public class EMSArena implements ConfigurationSerializable {
 
 		playerLeaveArenaCommon(player, true);
 	}
-
-	public boolean playerJoinTeam(Player player, String teamDisplayName) {		
+	
+	public boolean playerJoinTeam(Player player, String teamDisplayName) {
 		if (!playersInLobby.contains(player)) {
 			// Only if a player is in the lobby can they join a team
 			player.sendMessage(ChatColor.RED + "You're not in the lobby!");
@@ -1155,11 +1200,65 @@ public class EMSArena implements ConfigurationSerializable {
 		}
 
 		// The the event is not open then you can't join a team
-		if (arenaState != EMSArenaState.OPEN) {
-			player.sendMessage(ChatColor.RED + " arena is " + arenaState.toString().toLowerCase());
+		if (!arenaState.isJoinable()) {
+			player.sendMessage(ChatColor.RED + "[EMS] arena is not joinable (" + arenaState.toString().toLowerCase() + ")");
 			return false;
 		}
 		
+		if (!playerJoinTeamCommon(player, teamDisplayName)) {
+			//player.sendMessage(ChatColor.RED + " failed to add you to team " + teamDisplayName);
+			//return false;
+			
+			// Find the array list for the team the player wishes to join
+			ArrayList<Player> list;
+			if (!joinQueues.containsKey(teamDisplayName)) {
+				list = new ArrayList<Player>();
+				joinQueues.put(teamDisplayName, list);
+			} else {
+				list = joinQueues.get(teamDisplayName);
+			}
+			
+			// Check that they are not already in the queue for another team
+			Iterator<ArrayList<Player>> i = joinQueues.values().iterator();
+			while(i.hasNext()) {
+				ArrayList<Player> tmp = i.next();
+				if (tmp.contains(player) && (!tmp.equals(list))) {
+					tmp.remove(player);
+					player.sendMessage(ChatColor.GREEN + "[EMS] Removed you from your current queue as you're joining a different team");
+				}
+			}
+
+			// Finally check if they have already joined the queue for this team
+			if (!list.contains(player)) {
+				list.add(player);
+				player.sendMessage(ChatColor.GREEN + "[EMS] Added you to queue (possition " + list.indexOf(player) + ")");
+			} else {
+				player.sendMessage(ChatColor.RED + "[EMS] You're already in the queue!");
+			}
+		}
+		return true;
+	}
+
+	
+	public void processJoinQueue() {
+		// Walk all the teams trying to add the players into team
+		Iterator<String> i = joinQueues.keySet().iterator();
+		while(i.hasNext()) {
+			String teamDisplayName = i.next();
+			ArrayList<Player> list = joinQueues.get(teamDisplayName);
+			// Walk all the players in the queue until none remain, or the team is full 
+			Iterator<Player> ip = list.iterator();
+			while(ip.hasNext()) {
+				Player player = ip.next();
+				if (!playerJoinTeamCommon(player, teamDisplayName)) {
+					break;
+				}
+				ip.remove();
+			}
+		}
+	}
+	
+	public boolean playerJoinTeamCommon(Player player, String teamDisplayName) {
 		Iterator<EMSTeam> i = teams.values().iterator();
 		while (i.hasNext()) {
 			EMSTeam team = i.next();
@@ -1170,10 +1269,8 @@ public class EMSArena implements ConfigurationSerializable {
 					if ((fullTeams == teams.size()) && autoStartEnable) {
 						startEvent();
 					}
-				} else {
-					player.sendMessage(ChatColor.RED + " failed to add you to team " + teamDisplayName);
+					return true;
 				}
-				return true;
 			}
 		}
 		return false;
@@ -1298,7 +1395,7 @@ public class EMSArena implements ConfigurationSerializable {
 		if (playerInArena(player)) {	
 			String[] stringArray = message.split("\\s", 2);
 			if (!stringArray[0].equalsIgnoreCase("shout")) {
-				if (playersInLobby.contains(player)) {
+				if (playersInLobby.contains(player) || disableTeamChat) {
 					broadcast("[" + ChatColor.GREEN + "lobby" + ChatColor.RESET + "] " + player.getDisplayName() + ": " + message);
 				} else {
 					Iterator<EMSTeam> i = teams.values().iterator();

@@ -23,6 +23,13 @@ public enum EMSArenaState {
 		 return colourString;
 	 }
 	 
+	 public boolean isJoinable() {
+		 if ((this == OPEN) || (this == ACTIVE)) {
+			 return true;
+		 }
+		 return false;
+	 }
+	 
 	 public static EMSArenaState fromString(String string) {
 		 if (string != null) {
 			 for (EMSArenaState state : EMSArenaState.values()) {

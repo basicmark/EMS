@@ -187,6 +187,12 @@ public class EMSCommands {
 					"<true/false> [time limit in min] [per day] :- Set if there is a time limit before a player will be kicked",
 					true,
 					"ems.editarena");
+		cmdProc.add("set-disable-team-chat",
+					new EMSSetDisableTeamChat(),
+					1,
+					"<true/false> :- Set if team chat should be disabled for this arena",
+					true,
+					"ems.editarena");
 		cmdProc.add("list-events",
 					new EMSListEvents(),
 					0,
@@ -236,6 +242,12 @@ public class EMSCommands {
 					new EMSAddClearRegion(),
 					1,
 					"<trigger> :- Add a region to be cleared (as selected by the stick wand)",
+					true,
+					"ems.editarena");
+		cmdProc.add("add-fill-region",
+					new EMSAddFillRegion(),
+					2,
+					"<trigger> <block type> :- Add a region to be filled (as selected by the stick wand) with the specificed block",
 					true,
 					"ems.editarena");
 		cmdProc.add("add-teleport",
@@ -632,6 +644,15 @@ public class EMSCommands {
     	}
 	}
 	
+	public class EMSSetDisableTeamChat implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		boolean disable = Boolean.parseBoolean(args[0]);
+    		
+    		return manager.arenaSetDisableTeamChat(player, disable);
+    	}
+	}
+	
 	public class EMSListEvents implements CommandRunner {
     	public boolean run(CommandSender sender, String args[]) {
     		Player player = (Player) sender;
@@ -726,6 +747,16 @@ public class EMSCommands {
     		String eventTrigger = args[0];
 
     		return manager.arenaAddClearRegion(player, eventTrigger);
+    	}
+    }
+    
+    public class EMSAddFillRegion implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		String eventTrigger = args[0];
+    		String blockType = args[1];
+
+    		return manager.arenaAddFillRegion(player, eventTrigger, blockType);
     	}
     }
 
