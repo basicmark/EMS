@@ -5,6 +5,7 @@ import io.github.basicmark.ems.arenaevents.EMSAutoEnd;
 import io.github.basicmark.ems.arenaevents.EMSCheckTeamPlayerCount;
 import io.github.basicmark.ems.arenaevents.EMSClearRegion;
 import io.github.basicmark.ems.arenaevents.EMSEventBlock;
+import io.github.basicmark.ems.arenaevents.EMSFillRegion;
 import io.github.basicmark.ems.arenaevents.EMSLightningEffect;
 import io.github.basicmark.ems.arenaevents.EMSMessenger;
 import io.github.basicmark.ems.arenaevents.EMSPotionEffect;
@@ -57,6 +58,7 @@ public class EMSManager {
 		ConfigurationSerialization.registerClass(EMSCheckTeamPlayerCount.class);
 		ConfigurationSerialization.registerClass(EMSLightningEffect.class);
 		ConfigurationSerialization.registerClass(EMSPlayerRejoinData.class);
+		ConfigurationSerialization.registerClass(EMSFillRegion.class);
 	}
 	EMSArenaLoader loader;
 	HashMap<Player, EMSEditState> arenaEditState;
@@ -535,6 +537,21 @@ public class EMSManager {
 		return true;
 	}
 	
+	public boolean arenaSetDisableTeamChat(Player player, boolean disable) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
+			return true;
+		}	
+		
+		if (editState.arena.arenaDisableTeamChat(disable)) {
+			player.sendMessage(ChatColor.GREEN + "[EMS] Set team chat config");
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Failed to set team chat config");
+		}
+		return true;
+	}
+	
 	
 	public boolean arenaListEvents(Player player) {
 		EMSEditState editState = getArenaEditState(player, true);
@@ -697,7 +714,27 @@ public class EMSManager {
 		player.sendMessage(ChatColor.GREEN + "[EMS] Added clear region");
 		return true;
 	}
+	
+	public boolean arenaAddFillRegion(Player player, String eventTrigger, String blockType) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
+			return true;
+		}
 
+		if ((editState.pos1 == null) || (editState.pos2 == null)) {
+			player.sendMessage(ChatColor.RED + "[EMS] You need to select a region 1st");
+		}
+		
+		if (!editState.pos1.getWorld().equals(editState.pos2.getWorld())) {
+			player.sendMessage(ChatColor.RED + "[EMS] Regions must be in the same world!");
+		}
+
+		editState.arena.addFillRegion(eventTrigger, editState.pos1, editState.pos2, blockType);
+		player.sendMessage(ChatColor.GREEN + "[EMS] Added fill region");
+		return true;
+	}
+	
 	public boolean arenaAddTeleport(Player player, String eventTrigger) {
 		EMSEditState editState = getArenaEditState(player, true);
 		if (editState == null) {

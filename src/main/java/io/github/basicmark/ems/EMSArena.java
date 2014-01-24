@@ -1112,12 +1112,10 @@ public class EMSArena implements ConfigurationSerializable {
 	}
 	
 	public void playerJoinServer(Player player) {
-		if (!arenaCommandValid(player, false)) {
-			return;
-		}
-
 		// The common function will do the right thing
-		playerJoinArenaCommon(player, false);
+		if (arenaState == EMSArenaState.OPEN) {
+			playerJoinArenaCommon(player, false);
+		}
 	}
 	
 	public void playerLeaveServer(Player player) {
@@ -1689,7 +1687,7 @@ public class EMSArena implements ConfigurationSerializable {
 		public void run() {
 			// Create the respawn event which is now missing as we reset the health to full on death
 			arena.sendToLobby(player);
-			Bukkit.getPluginManager().callEvent(new PlayerRespawnEvent(player, player.getLocation(), false));
+			//Bukkit.getPluginManager().callEvent(new PlayerRespawnEvent(player, player.getLocation(), false));
 		}
 	}
 	
@@ -1703,14 +1701,6 @@ public class EMSArena implements ConfigurationSerializable {
 		}
 		
 		public void run() {
-			Bukkit.getServer().getLogger().info("Chunk loaded? " + location.getChunk().isLoaded());
-			BlockState states[] = location.getChunk().getTileEntities();
-			for (int i=0;i<states.length;i++) {
-				if (states[i].getLocation().equals(location)) {
-					Bukkit.getServer().getLogger().info("Found state for block update " +states[i]);
-					//Bukkit.getServer().getLogger().info(states[i].
-				}
-			}
 			EMSArena.updateSignDo(location, lines);
 		}
 	}
