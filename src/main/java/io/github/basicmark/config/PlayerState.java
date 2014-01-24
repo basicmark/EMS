@@ -36,6 +36,7 @@ public class PlayerState implements ConfigurationSerializable {
 		this.chestplate = player.getInventory().getChestplate();
 		this.leggings = player.getInventory().getLeggings();
 		this.boots = player.getInventory().getBoots();
+		recalcTotalExp(player);
 		this.experience = player.getTotalExperience();
 		this.health = player.getHealth();
 		this.food = player.getFoodLevel();
@@ -151,5 +152,49 @@ public class PlayerState implements ConfigurationSerializable {
 			player.setFoodLevel(food);
 			player.setSaturation(saturation);
 		}
+	}
+
+	/*
+	 * The following functions are taken from:
+	 * 
+	 * https://github.com/feildmaster/ControlORBle/blob/master/src/main/java/com/feildmaster/lib/expeditor/Editor.java
+	 * 
+	 * This is because the Minecraft XP doesn't seem to work in a sane way. If recalcTotalExp isn't called
+	 * then after enchanting the players total XP would be that before the enchantment as it seems to only
+	 * update the total XP on some events and enchanting is not one of the :( 
+	 */
+	public int getExp(Player player) {
+		return (int) (getExpToLevel(player) * player.getExp());
+	}
+	
+	public int getTotalExp(Player player) {
+		return getTotalExp(player, false);
+	}
+
+	public int getTotalExp(Player player, boolean recalc) {
+		if (recalc) {
+			recalcTotalExp(player);
+		}
+		return player.getTotalExperience();
+	}
+
+	public int getLevel(Player player) {
+		return player.getLevel();
+	}
+
+	public int getExpToLevel(Player player) {
+		return player.getExpToLevel();
+	}
+
+	public int getExpToLevel(int level) {
+		return level >= 30 ? 62 + (level - 30) * 7 : (level >= 15 ? 17 + (level - 15) * 3 : 17);
+	}
+	
+	private void recalcTotalExp(Player player) {
+		int total = getExp(player);
+		for (int i = 0; i < player.getLevel(); i++) {
+			total += getExpToLevel(i);
+		}
+		player.setTotalExperience(total);
 	}
 }
