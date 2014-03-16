@@ -552,6 +552,33 @@ public class EMSManager {
 		return true;
 	}
 	
+	public boolean arenaSetTeamplayerRespawnLimit(Player player, String teamName, String teamPlayer, String countString) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
+			return true;
+		}	
+
+		boolean team;
+		if (teamPlayer.equalsIgnoreCase("team")) {
+			team = true;
+		} else if (teamPlayer.equalsIgnoreCase("player")) {
+			team = false;
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Expected team or player but got " + teamPlayer);
+			return true;
+		}
+		
+		int count = Integer.parseInt(countString);
+		
+		if (editState.arena.arenaSetTeamplayerRespawnLimit(teamName, team, count)) {
+			player.sendMessage(ChatColor.GREEN + "[EMS] Set team respawn limit");
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Failed to set team respawn limit");
+		}
+		return true;
+	}
+	
 	
 	public boolean arenaListEvents(Player player) {
 		EMSEditState editState = getArenaEditState(player, true);

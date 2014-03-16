@@ -5,6 +5,7 @@ import io.github.basicmark.util.SpawnMethod;
 import io.github.basicmark.util.TeleportQueue;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.configuration.serialization.ConfigurationSerializable;
@@ -27,6 +29,9 @@ public class EMSTeam implements ConfigurationSerializable {
 	protected Location joinSignLocation;
 	protected int teamCap;
 	protected int forcedCap;
+	protected int playerRespawnLimit;
+	protected int teamRespawnLimit;
+	protected int teamRespawnReamining;
 	
 	// Run time data
 	/*
@@ -38,6 +43,7 @@ public class EMSTeam implements ConfigurationSerializable {
 	private EMSArena arena;
 	private EMSTeamState teamState;
 	private boolean teamFull;
+	private HashMap<Player, PlayerData> playerData;
 
 	public EMSTeam(String name, String displayName, EMSArena arena) {
 		// Init all the "static" data to their default values
@@ -55,6 +61,9 @@ public class EMSTeam implements ConfigurationSerializable {
 		this.arena = arena;
 		this.teamState = EMSTeamState.EDITING;
 		this.teamFull = false;
+		this.playerRespawnLimit = 0;
+		this.teamRespawnLimit = 0;
+		this.playerData = new HashMap<Player, PlayerData>();
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -100,12 +109,24 @@ public class EMSTeam implements ConfigurationSerializable {
 			this.teamCap = 0;
 		}
 
+		try {
+			this.playerRespawnLimit = (int) values.get("playerrespawnlimit");
+		} catch (Exception e) {
+			this.playerRespawnLimit = 0;
+		}
+		try {
+			this.teamRespawnLimit = (int) values.get("teamrespawnlimit");
+		} catch (Exception e) {
+			this.teamRespawnLimit = 0;
+		}
+		
 		// Create the "run time" data which doesn't need to be saved
 		this.players = new HashSet<Player>();	//new ConcurrentSkipListSet<Player>();
 		this.arena = arena;
 		this.teamState = EMSTeamState.CLOSED;
 		this.forcedCap = 0;
 		this.teamFull = false;
+		this.playerData = new HashMap<Player, PlayerData>();
 	}
 
 	@Override
@@ -133,7 +154,8 @@ public class EMSTeam implements ConfigurationSerializable {
 		
 		values.put("spawnmethod", spawnMethod.toString().toLowerCase());
 		values.put("teamcap", teamCap);
-		
+		values.put("playerrespawnlimit", playerRespawnLimit);
+		values.put("teamrespawnlimit", teamRespawnLimit);
 		return values;
 	}
 	
@@ -223,6 +245,24 @@ public class EMSTeam implements ConfigurationSerializable {
 		return (joinSignLocation != null);
 	}
 	
+	public void setTeamRespawnLimit(boolean team, int limit) {
+		if (team) {
+			teamRespawnLimit = limit;
+			playerRespawnLimit = 0;
+		} else {
+			teamRespawnLimit = 0;
+			playerRespawnLimit = limit;
+		}
+	}
+	
+	public Location getRespawnLocation() {
+		// TODO: Allow respawn to have it's own location
+		if (spawns.isEmpty()) {
+			return null;
+		}
+		return spawns.get(0);
+	}
+	
 	public void updateStatus(EMSArenaState arenaState) {
 		teamState = EMSTeamState.fromArenaState(arenaState);
 		updateStatusSign();
@@ -261,6 +301,7 @@ public class EMSTeam implements ConfigurationSerializable {
 	public boolean addPlayer(Player player) {
 		if ((getGetCap() == 0) || (players.size() < getGetCap())) {
 			players.add(player);
+			playerData.put(player, new PlayerData(playerRespawnLimit));
 			if (hasLobby()) {
 				arena.teleportPlayer(player, lobby);
 			}
@@ -284,6 +325,8 @@ public class EMSTeam implements ConfigurationSerializable {
 	 */
 	
 	public void removePlayerDo(Player player, boolean sendToLobby) {
+		playerData.remove(player);
+
 		if (sendToLobby) {
 			arena.sendToLobby(player);
 		}
@@ -306,11 +349,24 @@ public class EMSTeam implements ConfigurationSerializable {
 		updateStatusSign();
 	}
 	
-	public void playerDeath(Player player) {
-		// The death runner in the arena will send the player to the lobby
-		players.remove(player);
-		removePlayerDo(player, false);
-		updateStatusSign();
+	/* Return true if the player is really dead */
+	public boolean playerDeath(Player player) {
+		if (playerData.get(player).playerDeath())
+		{
+			if (teamRespawnReamining == -1) {
+				return false;
+			}
+			if (teamRespawnReamining > 0) {
+				teamRespawnReamining --;
+			} else {
+				// The death runner in the arena will send the player to the lobby
+				players.remove(player);
+				removePlayerDo(player, false);
+				updateStatusSign();
+				return true;
+			}
+		}
+		return false;
 	}
 	
 	public void removeAllPlayers () {
@@ -353,6 +409,9 @@ public class EMSTeam implements ConfigurationSerializable {
 		if (hasSpawn()) {
 			SpawnMethod.spawnPlayers(spawnMethod, players, spawns, queue);
 		}
+		
+		// Start of game so reset the team respawn limit
+		teamRespawnReamining = teamRespawnLimit;
 	}
 	
 	public void broadcast(String message) {
@@ -360,6 +419,25 @@ public class EMSTeam implements ConfigurationSerializable {
 		while (ip.hasNext()) {
 			Player player = ip.next();
 			player.sendMessage(message);
+		}
+	}
+	
+	private class PlayerData {
+		int respawnsRemaining;
+
+		PlayerData(int respawnLimit) {
+			respawnsRemaining = respawnLimit;
+		}
+
+		/* Return true if the player is really dead */
+		boolean playerDeath() {
+			if (respawnsRemaining == -1) {
+				return false;
+			}
+			if (respawnsRemaining != 0) {
+				respawnsRemaining--;
+			}
+			return respawnsRemaining == 0;
 		}
 	}
 }

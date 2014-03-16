@@ -546,6 +546,13 @@ public class EMSArena implements ConfigurationSerializable {
 		return true;
 	}
 	
+	public boolean arenaSetTeamplayerRespawnLimit(String teamName, boolean teamplayer, int count)
+	{
+		EMSTeam team = teams.get(teamName);
+		team.setTeamRespawnLimit(teamplayer, count);
+		return true;
+	}
+	
 	public boolean listEvents(Player player) {
 		Iterator<EMSArenaEvent> i = events.iterator();
 		int j = 0;
@@ -573,7 +580,6 @@ public class EMSArena implements ConfigurationSerializable {
 		events.add(messageEvent);
 		return true;
 	}
-
 	public boolean addTimer(String eventTrigger, String createName, boolean inSeconds, boolean repeat, String timeString, String displayName) {
 		EMSTimer timerEvent = new EMSTimer(this, eventTrigger, createName, inSeconds, repeat, timeString, displayName);
 		if (!timerEvent.parseTimeString()) {
@@ -1348,22 +1354,38 @@ public class EMSArena implements ConfigurationSerializable {
 			while(i.hasNext()) {
 				EMSTeam team = i.next();
 				if (team.isPlayerInTeam(player)) {
-					team.playerDeath(player);
+					boolean isDead = team.playerDeath(player);
+					Location loc = null;
 
 					// Reset the health here before the death screen gets displayed
 					player.setHealth(player.getMaxHealth());
-					plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, (Runnable) new EMSDeathRunner(player, this), 1);
-					if (keepInvAfterDeath) {
-						playersDeathInv.put(player, new PlayerDeathInventory(player));
-					}
-
-					/*
-					 * Although the player is in limbo for 1 tick we can signal death & leave
-					 * events here as the player has already been removed from the team
-					 */
 					signalEvent("player-death");
-					signalEvent("player-leave");
-					inTeam = true;
+
+					if (!isDead) {
+						loc = team.getRespawnLocation();
+						plugin.getServer().getLogger().info("[EMS] failed to respawn player in arena " + name + " as there is no respawn location!");
+						if (loc == null) {
+							isDead = true;
+						}
+					}
+					if (!isDead) {
+						plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, (Runnable) new EMSDeathRunner(player, loc), 1);
+						if (keepInvAfterDeath) {
+							playersDeathInv.put(player, new PlayerDeathInventory(player));
+						}	
+					} else {
+						plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, (Runnable) new EMSDeathRunner(player, this), 1);
+						if (keepInvAfterDeath) {
+							playersDeathInv.put(player, new PlayerDeathInventory(player));
+						}
+
+						/*
+						 * Although the player is in limbo for 1 tick we can signal death & leave
+						 * events here as the player has already been removed from the team
+						 */
+						signalEvent("player-leave");
+						inTeam = true;
+					}
 				}
 			}
 			if ((!inTeam) && lobbyRespawn) {
@@ -1623,14 +1645,6 @@ public class EMSArena implements ConfigurationSerializable {
 	
 	// Private functions
 	private void restorePlayer(Player player) {
-		//Reset the player to a good state after their death
-		player.setHealth(player.getMaxHealth());
-		player.setFireTicks(0);
-		for (PotionEffect effect : player.getActivePotionEffects()) {
-			player.removePotionEffect(effect.getType());
-		}
-		player.setVelocity(new Vector(0, 0, 0));
-
 		/* Clear down a players inventory when they rejoin the lobby if required */
 		if (!keepInvAfterEvent) {
 			player.getInventory().clear();
@@ -1677,16 +1691,36 @@ public class EMSArena implements ConfigurationSerializable {
 	public class EMSDeathRunner implements Runnable {
 		Player player;
 		EMSArena arena;
+		Location location;
 
 		public EMSDeathRunner(Player player, EMSArena arena) {
 			this.player = player;
 			this.arena = arena;
+			this.location = null;
 		}
+		
+		public EMSDeathRunner(Player player, Location location) {
+			this.player = player;
+			this.arena = null;
+			this.location = location;
+		}		
 
 		@Override
 		public void run() {
+			//Reset the player to a good state after their death
+			player.setHealth(player.getMaxHealth());
+			player.setFireTicks(0);
+			for (PotionEffect effect : player.getActivePotionEffects()) {
+				player.removePotionEffect(effect.getType());
+			}
+			player.setVelocity(new Vector(0, 0, 0));
+			
 			// Create the respawn event which is now missing as we reset the health to full on death
-			arena.sendToLobby(player);
+			if (arena != null) {
+				arena.sendToLobby(player);
+			} else if (location != null) {
+				teleportPlayer(player, location);
+			}
 			//Bukkit.getPluginManager().callEvent(new PlayerRespawnEvent(player, player.getLocation(), false));
 		}
 	}

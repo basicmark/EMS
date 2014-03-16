@@ -193,6 +193,12 @@ public class EMSCommands {
 					"<true/false> :- Set if team chat should be disabled for this arena",
 					true,
 					"ems.editarena");
+		cmdProc.add("set-teamplayer-respawn-limit",
+					new EMSSetTeamplayerRespawnLimit(),
+					3,
+					"<team name> <team/player> <count>:- Set the number of respawns a team or player is allowed",
+					true,
+					"ems.editarena");	
 		cmdProc.add("list-events",
 					new EMSListEvents(),
 					0,
@@ -652,6 +658,17 @@ public class EMSCommands {
     		return manager.arenaSetDisableTeamChat(player, disable);
     	}
 	}
+
+    public class EMSSetTeamplayerRespawnLimit implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		String teamName = args[0];
+    		String teamPlayer = args[1];
+    		String count =  args[2];
+
+    		return manager.arenaSetTeamplayerRespawnLimit(player, teamName, teamPlayer, count);
+    	}
+    }
 	
 	public class EMSListEvents implements CommandRunner {
     	public boolean run(CommandSender sender, String args[]) {
