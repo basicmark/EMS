@@ -1,6 +1,7 @@
 package io.github.basicmark.ems;
 
 import io.github.basicmark.config.PlayerState;
+import io.github.basicmark.config.ReferenceInventory;
 import io.github.basicmark.ems.arenaevents.EMSAutoEnd;
 import io.github.basicmark.ems.arenaevents.EMSCheckTeamPlayerCount;
 import io.github.basicmark.ems.arenaevents.EMSClearRegion;
@@ -59,6 +60,7 @@ public class EMSManager {
 		ConfigurationSerialization.registerClass(EMSLightningEffect.class);
 		ConfigurationSerialization.registerClass(EMSPlayerRejoinData.class);
 		ConfigurationSerialization.registerClass(EMSFillRegion.class);
+		ConfigurationSerialization.registerClass(ReferenceInventory.class);
 	}
 	EMSArenaLoader loader;
 	HashMap<Player, EMSEditState> arenaEditState;
@@ -579,6 +581,50 @@ public class EMSManager {
 		return true;
 	}
 	
+	public boolean arenaAddReferenceInventory(Player player, String name) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
+			return true;
+		}	
+
+		if (editState.arena.arenaAddReferenceInventory(player, name)) {
+			player.sendMessage(ChatColor.GREEN + "[EMS] Added reference inventory " + name);
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Failed to add reference inventory " + name);
+		}
+		return true;
+	}
+	
+	public boolean arenaRemoveReferenceInventory(Player player, String name) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
+			return true;
+		}	
+
+		if (editState.arena.arenaRemoveReferenceInventory(name)) {
+			player.sendMessage(ChatColor.GREEN + "[EMS] Remove reference inventory " + name);
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Failed to remove reference inventory " + name);
+		}
+		return true;
+	}
+	
+	public boolean arenaSetTeamReferenceInventory(Player player, String teamName, String invName) {
+		EMSEditState editState = getArenaEditState(player, true);
+		if (editState == null) {
+			player.sendMessage(ChatColor.RED + "[EMS] Fatal error while getting edit state");
+			return true;
+		}	
+
+		if (editState.arena.arenaSetTeamReferenceInventory(teamName, invName)) {
+			player.sendMessage(ChatColor.GREEN + "[EMS] Set " + teamName + "'s reference inventory to " + invName);
+		} else {
+			player.sendMessage(ChatColor.RED + "[EMS] Failed to set " + teamName + "'s reference inventory to " + invName);
+		}
+		return true;
+	}
 	
 	public boolean arenaListEvents(Player player) {
 		EMSEditState editState = getArenaEditState(player, true);

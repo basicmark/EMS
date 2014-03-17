@@ -1,6 +1,7 @@
 package io.github.basicmark.ems;
 
 import io.github.basicmark.config.ConfigUtils;
+import io.github.basicmark.config.ReferenceInventory;
 import io.github.basicmark.util.SpawnMethod;
 import io.github.basicmark.util.TeleportQueue;
 
@@ -32,6 +33,7 @@ public class EMSTeam implements ConfigurationSerializable {
 	protected int playerRespawnLimit;
 	protected int teamRespawnLimit;
 	protected int teamRespawnReamining;
+	protected String refInvName;
 	
 	// Run time data
 	/*
@@ -64,6 +66,7 @@ public class EMSTeam implements ConfigurationSerializable {
 		this.playerRespawnLimit = 0;
 		this.teamRespawnLimit = 0;
 		this.playerData = new HashMap<Player, PlayerData>();
+		this.refInvName = null;
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -119,6 +122,12 @@ public class EMSTeam implements ConfigurationSerializable {
 		} catch (Exception e) {
 			this.teamRespawnLimit = 0;
 		}
+
+		try {
+			this.refInvName = (String) values.get("refinvname");
+		} catch (Exception e) {
+			this.refInvName = null;
+		}
 		
 		// Create the "run time" data which doesn't need to be saved
 		this.players = new HashSet<Player>();	//new ConcurrentSkipListSet<Player>();
@@ -156,6 +165,11 @@ public class EMSTeam implements ConfigurationSerializable {
 		values.put("teamcap", teamCap);
 		values.put("playerrespawnlimit", playerRespawnLimit);
 		values.put("teamrespawnlimit", teamRespawnLimit);
+
+		if (refInvName != null) {
+			values.put("refinvname", refInvName);
+		}
+
 		return values;
 	}
 	
@@ -261,6 +275,14 @@ public class EMSTeam implements ConfigurationSerializable {
 			return null;
 		}
 		return spawns.get(0);
+	}
+	
+	public void setReferenceInventory(String invName) {
+		refInvName = invName;
+	}
+	
+	public String getReferenceInventory() {
+		return refInvName;
 	}
 	
 	public void updateStatus(EMSArenaState arenaState) {
@@ -406,6 +428,14 @@ public class EMSTeam implements ConfigurationSerializable {
 	}
 	
 	public void spawnPlayers(TeleportQueue queue) {
+		if (refInvName != null) {
+			ReferenceInventory refInv = arena.refInvLoader.load(refInvName);
+			Iterator<Player> ip = players.iterator();
+			while (ip.hasNext()) {
+				Player player = ip.next();
+				refInv.load(player);
+			}
+		}
 		if (hasSpawn()) {
 			SpawnMethod.spawnPlayers(spawnMethod, players, spawns, queue);
 		}

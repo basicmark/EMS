@@ -199,6 +199,24 @@ public class EMSCommands {
 					"<team name> <team/player> <count>:- Set the number of respawns a team or player is allowed",
 					true,
 					"ems.editarena");	
+		cmdProc.add("add-reference-inventory",
+					new EMSAddReferenceInventory(),
+					1,
+					"<inventory name> :- Create a reference inventory based on your current inventory",
+					true,
+					"ems.editarena");	
+		cmdProc.add("remove-reference-inventory",
+					new EMSRemoveReferenceInventory(),
+					1,
+					"<inventory name> :- Remove a previsouly created reference inventory",
+					true,
+					"ems.editarena");
+		cmdProc.add("set-team-reference-inventory",
+					new EMSSetTeamReferenceInventory(),
+					2,
+					"<team name> <inventory name> :- Set a teams reference inventory",
+					true,
+					"ems.editarena");
 		cmdProc.add("list-events",
 					new EMSListEvents(),
 					0,
@@ -670,6 +688,35 @@ public class EMSCommands {
     	}
     }
 	
+	public class EMSAddReferenceInventory implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		String name = args[0];
+
+    		return manager.arenaAddReferenceInventory(player, name);
+    	}
+    }
+
+	public class EMSRemoveReferenceInventory implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		String name = args[0];
+
+    		return manager.arenaRemoveReferenceInventory(player, name);
+    	}
+    }
+	
+	public class EMSSetTeamReferenceInventory implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		Player player = (Player) sender;
+    		String teamName = args[0];
+    		String invName = args[1];
+
+    		return manager.arenaSetTeamReferenceInventory(player, teamName, invName);
+    	}
+    }
+	
+    
 	public class EMSListEvents implements CommandRunner {
     	public boolean run(CommandSender sender, String args[]) {
     		Player player = (Player) sender;

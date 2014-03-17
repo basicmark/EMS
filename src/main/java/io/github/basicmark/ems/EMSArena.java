@@ -3,6 +3,8 @@ package io.github.basicmark.ems;
 import io.github.basicmark.config.ConfigUtils;
 import io.github.basicmark.config.PlayerState;
 import io.github.basicmark.config.PlayerStateLoader;
+import io.github.basicmark.config.ReferenceInventory;
+import io.github.basicmark.config.ReferenceInventoryLoader;
 import io.github.basicmark.ems.EMSArenaState;
 import io.github.basicmark.ems.arenaevents.EMSArenaEvent;
 import io.github.basicmark.ems.arenaevents.EMSAutoEnd;
@@ -97,6 +99,7 @@ public class EMSArena implements ConfigurationSerializable {
 	protected HashMap<Player, EMSPlayerTimeData> playerTimes;
 	protected TeleportQueue teleportQueue;
 	protected EMSManager manager;
+	protected ReferenceInventoryLoader refInvLoader;
 	
 	PlayerStateLoader playerLoader;
 	EMSPlayerRejoinDataLoader playerRejoinLoader;
@@ -122,6 +125,7 @@ public class EMSArena implements ConfigurationSerializable {
 		this.perPeriodLimit = 0;
 		this.timerUpdate = -1;
 		this.disableTeamChat = false;
+		this.refInvLoader = null;
 	}
 	
 	public EMSArena(String name) {
@@ -355,6 +359,10 @@ public class EMSArena implements ConfigurationSerializable {
 		playerRejoinLoader = new EMSPlayerRejoinDataLoader(plugin.getDataFolder()+ "/save/arena/" + name);
 		teleportQueue = new TeleportQueue(plugin);
 		
+		if (this.lobby != null) {
+			refInvLoader = new ReferenceInventoryLoader(plugin.getDataFolder() + "/arenas/" + lobby.getWorld().getName() + "/" + name + "_refinvs");
+		}
+		
 		/*
 		 * !!!Bukkit is broken!!!
 		 * It turns out that Bukkit will tell you that a chunk is loaded before
@@ -404,6 +412,10 @@ public class EMSArena implements ConfigurationSerializable {
 	
 	// Arena setup functions
 	public void setLobby(Player player) {
+		// TODO: Move elsewhere. We should know the world from the start of the arena creation
+		if (lobby == null) {
+			refInvLoader = new ReferenceInventoryLoader(plugin.getDataFolder() + "/arenas/" + lobby.getWorld().getName() + "/" + name + "_refinvs");
+		}
 		lobby = player.getLocation();
 	}
 	
@@ -550,6 +562,30 @@ public class EMSArena implements ConfigurationSerializable {
 	{
 		EMSTeam team = teams.get(teamName);
 		team.setTeamRespawnLimit(teamplayer, count);
+		return true;
+	}
+	
+	public boolean arenaAddReferenceInventory(Player player, String name) {
+		refInvLoader.save(name, new ReferenceInventory(player));
+		return true;
+	}
+	
+	public boolean arenaRemoveReferenceInventory(String name) {
+		refInvLoader.delete(name);
+		return true;
+	}
+	
+	public boolean arenaSetTeamReferenceInventory(String teamName, String invName) {
+		if (!teams.containsKey(teamName)) {
+			return false;
+		}
+		
+		if (!refInvLoader.exists(invName)) {
+			return false;
+		}
+		
+		EMSTeam team = teams.get(teamName);
+		team.setReferenceInventory(invName);
 		return true;
 	}
 	
@@ -1363,16 +1399,16 @@ public class EMSArena implements ConfigurationSerializable {
 
 					if (!isDead) {
 						loc = team.getRespawnLocation();
-						plugin.getServer().getLogger().info("[EMS] failed to respawn player in arena " + name + " as there is no respawn location!");
 						if (loc == null) {
+							plugin.getServer().getLogger().info("[EMS] failed to respawn player in arena " + name + " as there is no respawn location!");
 							isDead = true;
 						}
 					}
 					if (!isDead) {
-						plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, (Runnable) new EMSDeathRunner(player, loc), 1);
+						plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, (Runnable) new EMSDeathRunner(player, this, loc, team.getReferenceInventory()), 1);
 						if (keepInvAfterDeath) {
 							playersDeathInv.put(player, new PlayerDeathInventory(player));
-						}	
+						}
 					} else {
 						plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, (Runnable) new EMSDeathRunner(player, this), 1);
 						if (keepInvAfterDeath) {
@@ -1692,6 +1728,7 @@ public class EMSArena implements ConfigurationSerializable {
 		Player player;
 		EMSArena arena;
 		Location location;
+		String referenceInventory;
 
 		public EMSDeathRunner(Player player, EMSArena arena) {
 			this.player = player;
@@ -1699,10 +1736,11 @@ public class EMSArena implements ConfigurationSerializable {
 			this.location = null;
 		}
 		
-		public EMSDeathRunner(Player player, Location location) {
+		public EMSDeathRunner(Player player, EMSArena arena, Location location, String referenceInventory) {
 			this.player = player;
-			this.arena = null;
+			this.arena = arena;
 			this.location = location;
+			this.referenceInventory = referenceInventory;
 		}		
 
 		@Override
@@ -1716,9 +1754,13 @@ public class EMSArena implements ConfigurationSerializable {
 			player.setVelocity(new Vector(0, 0, 0));
 			
 			// Create the respawn event which is now missing as we reset the health to full on death
-			if (arena != null) {
+			if (location == null) {
 				arena.sendToLobby(player);
-			} else if (location != null) {
+			} else {
+				if (referenceInventory != null) {
+					ReferenceInventory refInv = arena.refInvLoader.load(referenceInventory);
+					refInv.load(player);
+				}
 				teleportPlayer(player, location);
 			}
 			//Bukkit.getPluginManager().callEvent(new PlayerRespawnEvent(player, player.getLocation(), false));
