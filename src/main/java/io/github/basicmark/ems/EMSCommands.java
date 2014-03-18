@@ -330,6 +330,12 @@ public class EMSCommands {
 					"<arena name> :- End tracking in the specified arena",
 					false,
 					"ems.host");
+		cmdProc.add("kick-teamplayer",
+					new EMSKickTeamplayer(),
+					3,
+					"<arena name> <team/player> <team/player name> :- Kick a whole team or just a player from an event",
+					false,
+					"ems.host");
 		cmdProc.add("end",
 					new EMSEndArena(),
 					1,
@@ -922,6 +928,16 @@ public class EMSCommands {
     		String arenaName = args[0];
 
     		return manager.arenaEndTracking(sender, arenaName);
+    	}
+    }
+	
+	public class EMSKickTeamplayer implements CommandRunner {
+    	public boolean run(CommandSender sender, String args[]) {
+    		String arenaName = args[0];
+    		String teamplayer = args[1];
+    		String name = args[2];
+
+    		return manager.arenaKickTeamplayer(sender, arenaName, teamplayer, name);
     	}
     }
 

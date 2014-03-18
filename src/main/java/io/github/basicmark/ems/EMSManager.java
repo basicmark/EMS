@@ -994,6 +994,30 @@ public class EMSManager {
 		sender.sendMessage(ChatColor.GREEN + "[EMS] Arena " + arenaName + " tacking ended");
 		return true;
 	}
+	
+	public boolean arenaKickTeamplayer(CommandSender sender, String arenaName, String teamPlayer, String name) {
+		EMSArena arena = getArena(sender, arenaName);
+		if (arena == null) {
+			return true;
+		}
+		
+		boolean team;
+		if (teamPlayer.equalsIgnoreCase("team")) {
+			team = true;
+		} else if (teamPlayer.equalsIgnoreCase("player")) {
+			team = false;
+		} else {
+			sender.sendMessage(ChatColor.RED + "[EMS] Expected team or player but got " + teamPlayer);
+			return true;
+		}
+		
+		if (arena.KickTeamplayer(team, name)) {
+			sender.sendMessage(ChatColor.GREEN + "[EMS] Kicked " + teamPlayer + " " + name);
+		} else {
+			sender.sendMessage(ChatColor.RED + "[EMS] Failed to kick " + teamPlayer + " " + name);
+		}
+		return true;
+	}
 
 	public void playerJoinServer(Player player) {
 		arenaEditState.put(player, new EMSEditState());

@@ -1034,6 +1034,34 @@ public class EMSArena implements ConfigurationSerializable {
 		}
 	}
 	
+	public boolean KickTeamplayer(boolean teamplayer, String name) {
+		Player player = null;
+		
+		if (!teamplayer) {
+			player = plugin.getServer().getPlayer(name);
+			if (player == null) {
+				return false;
+			}
+		}
+
+		Iterator<EMSTeam> i = teams.values().iterator();
+		while(i.hasNext()) {
+			EMSTeam team = i.next();
+			if (teamplayer) {
+				if (team.getName().equals(name)) {
+					team.removeAllPlayers();
+					return true;
+				}
+			} else {
+				if (team.isPlayerInTeam(player)) {
+					team.removePlayer(player);
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	
 	// Player functions
 	@SuppressWarnings("deprecation")
 	public void playerJoinArenaCommon(Player player, boolean playerRequested) {
