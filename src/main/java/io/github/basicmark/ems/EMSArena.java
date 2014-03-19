@@ -1079,9 +1079,11 @@ public class EMSArena implements ConfigurationSerializable {
 	
 		if (rejoinData != null) {
 			if ((playerRequested) || ((!playerRequested ) && rejoinData.getAutoRejoin())) {
-				if (rejoinData.getActiveTime() >= getAllowedTime()) {
-					player.sendMessage(ChatColor.GOLD + "[EMS] You've reached your time-limit and are not allowed to rejoin the arena!");
-					return;
+				if (timeLimit != 0) {
+					if (rejoinData.getActiveTime() >= getAllowedTime()) {
+						player.sendMessage(ChatColor.GOLD + "[EMS] You've reached your time-limit and are not allowed to rejoin the arena!");
+						return;
+					}
 				}
 				
 				// The player has been here before, should we make them rejoin the arena?
