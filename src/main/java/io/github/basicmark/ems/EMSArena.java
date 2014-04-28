@@ -412,11 +412,12 @@ public class EMSArena implements ConfigurationSerializable {
 	
 	// Arena setup functions
 	public void setLobby(Player player) {
+		Location location = player.getLocation();
 		// TODO: Move elsewhere. We should know the world from the start of the arena creation
 		if (lobby == null) {
-			refInvLoader = new ReferenceInventoryLoader(plugin.getDataFolder() + "/arenas/" + lobby.getWorld().getName() + "/" + name + "_refinvs");
+			refInvLoader = new ReferenceInventoryLoader(plugin.getDataFolder() + "/arenas/" + location.getWorld().getName() + "/" + name + "_refinvs");
 		}
-		lobby = player.getLocation();
+		lobby = location;
 	}
 	
 	public void setLobbyRespawn(boolean lobbyRespawn) {
