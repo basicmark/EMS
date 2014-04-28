@@ -20,6 +20,7 @@ public class PlayerState implements ConfigurationSerializable {
 	boolean restoreInventory;
 	boolean restoreXP;
 	boolean restoreHealth;
+	String name;
 	
 	public PlayerState(Player player, boolean restoreInventory, boolean restoreXP, boolean restoreHealth) {
 		/* Save all the vital states of the player */
@@ -44,6 +45,7 @@ public class PlayerState implements ConfigurationSerializable {
 		this.restoreInventory = restoreInventory;
 		this.restoreXP = restoreXP;
 		this.restoreHealth = restoreHealth;
+		this.name = player.getName();
 
 		/* Check what needs to be set to the "default" settings */
 		if (restoreInventory) {
@@ -100,6 +102,8 @@ public class PlayerState implements ConfigurationSerializable {
 	public Map<String, Object> serialize() {
 		Map<String, Object> values = new LinkedHashMap<String, Object>();
 
+		/* Store the player name just in case we need to check the config files by hand */ 
+		values.put("name", name);
 		values.put("restoreinventory", restoreInventory);
 		values.put("restorexp", restoreXP);
 		values.put("restorehealth", restoreHealth);

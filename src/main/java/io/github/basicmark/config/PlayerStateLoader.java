@@ -20,7 +20,7 @@ public class PlayerStateLoader extends ConfigurationSerialization {
 	}
 
 	protected String getConfigPath(Player player) {
-		return configDir + "/" + player.getName() + ".yml";
+		return configDir + "/" + player.getUniqueId() + ".yml";
 	}
 	
 	protected File getConfigFile(Player player) {
